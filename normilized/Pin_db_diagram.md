@@ -1,3 +1,6 @@
+# Схема БД
+
+```mermaid
 erDiagram
 	direction TB
 	USER {
@@ -125,3 +128,4 @@ erDiagram
 	CHAT||--o{CHAT_MESSAGE:"contains"
 	CHAT_MESSAGE||--o{CHAT_MESSAGE:"reply_to"
 	TAG||--o{PIN_TAG_RELATION:"tagged"
+```
