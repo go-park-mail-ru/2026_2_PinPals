@@ -27,20 +27,20 @@
 
     User:
 
-        {user_id} -> name, user_tag, age, description, avatar_url, created_at, last_updated_at - первичный сурогатный ключ
-        {user_tag} -> user_id, name, age, description, avatar_url, created_at, last_updated_at - естественный ключ
+        {user_id} -> name, user_tag, age, description, avatar_url, created_at, updated_at - первичный сурогатный ключ
+        {user_tag} -> user_id, name, age, description, avatar_url, created_at, updated_at - естественный ключ
 
     Desk:
 
-        {desk_id} -> creator_id, name, description, avatar_img_url, entry_status, created_at, last_updated_at - первичный сургатный ключ
+        {desk_id} -> creator_id, name, description, avatar_img_url, entry_status, created_at, updated_at - первичный сургатный ключ
 
     Pin:
 
-        {pin_id} -> creator_id, image_url, name, description, created_at, last_updated_at, deleted_at - первичный сурогатнывй ключ
+        {pin_id} -> creator_id, image_url, name, description, created_at, updated_at, deleted_at - первичный сурогатнывй ключ
 
     Commentary:
 
-        {comment_id} -> author_id, post_id, body, created_at, last_updated_at, deleted_at - первичный сурогатный ключ
+        {comment_id} -> author_id, post_id, body, created_at, updated_at, deleted_at - первичный сурогатный ключ
 
     Pin_like:
 
