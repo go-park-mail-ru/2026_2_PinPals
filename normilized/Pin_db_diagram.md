@@ -11,7 +11,7 @@ erDiagram
 		text description  ""  
 		text avatar_url  ""  
 		timestamptz created_at  ""  
-		timestamptz last_updated_at  ""  
+		timestamptz updated_at  ""  
 	}
 
 	PIN {
@@ -21,7 +21,7 @@ erDiagram
 		text name  ""  
 		text description  ""  
 		timestamptz created_at  ""  
-		timestamptz last_updated_at  ""  
+		timestamptz updated_at  ""  
 		timestamptz deleted_at  ""  
 	}
 
@@ -31,7 +31,7 @@ erDiagram
 		bigint post_id FK ""  
 		text body  ""  
 		timestamptz created_at  ""  
-		timestamptz last_updated_at  ""  
+		timestamptz updated_at  ""  
 		timestamptz deleted_at  ""  
 	}
 
@@ -96,7 +96,7 @@ erDiagram
 		text avatar_img_url  ""  
 		smallint entry_status  ""  
 		timestamptz created_at  ""  
-		timestamptz last_updated_at  ""  
+		timestamptz updated_at  ""  
 	}
 
 	TAG {
