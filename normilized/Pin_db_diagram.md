@@ -17,6 +17,14 @@ erDiagram
         timestamptz deleted_at
     }
 
+    PASSWORD {
+        int password_id PK
+        int user_id FK
+        text password_hash
+        timestamptz session_start
+        timestamptz session_end
+    }
+
     USER_SESSION {
         int session_id PK
         int user_id FK
@@ -52,7 +60,7 @@ erDiagram
     COMMENTARY {
         int comment_id PK
         int author_id FK
-        int post_id FK
+        int pin_id FK
         text body
         bool deleted
         timestamptz created_at
@@ -63,7 +71,7 @@ erDiagram
     PIN_LIKE {
         int pin_like_id PK
         int liker_id FK
-        int post_id FK
+        int pin_id FK
         timestamptz created_at
     }
 
@@ -125,6 +133,7 @@ erDiagram
     }
 
     USER       ||--o{ USER_SESSION       : has
+    USER       ||--o{ PASSWORD           : has
     USER       ||--o{ DESK               : creates
     USER       ||--o{ PIN                : creates
     USER       ||--o{ COMMENTARY         : writes
