@@ -4,6 +4,12 @@ FOR EACH ROW
 WHEN (OLD.* IS DISTINCT FROM NEW.*)
 EXECUTE FUNCTION fn_set_updated_at();
 
+CREATE TRIGGER trg_password_updated_at
+BEFORE UPDATE ON "password"
+FOR EACH ROW
+WHEN (OLD.* IS DISTINCT FROM NEW.*)
+EXECUTE FUNCTION fn_set_updated_at();
+
 CREATE TRIGGER trg_desk_updated_at
 BEFORE UPDATE ON desk
 FOR EACH ROW

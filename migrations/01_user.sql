@@ -7,7 +7,7 @@ CREATE TABLE "user" (
     avatar_url      text        UNIQUE,
     deleted         boolean     NOT NULL DEFAULT false,
     created_at      timestamptz NOT NULL DEFAULT now(),
-    updated_at timestamptz NOT NULL DEFAULT now(),
+    updated_at      timestamptz NOT NULL DEFAULT now(),
     deleted_at      timestamptz
 );
 
