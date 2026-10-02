@@ -4,19 +4,17 @@ FROM golang:1.27-alpine AS builder
 WORKDIR /src
 
 # Сначала зависимости — они кешируются отдельно от кода
-COPY go.mod go.sum ./
+COPY go.mod ./
 RUN go mod download
 
 # Потом код
 COPY . .
 
 # Статически слинкованный бинарник
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/app ./internal/pins
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/app ./cmd/server/main.go
 
 # ---------- Этап запуска ----------
 FROM alpine:3.20
-
-RUN apk add --no-cache ca-certificates tzdata
 
 WORKDIR /app
 
