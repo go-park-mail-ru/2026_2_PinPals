@@ -14,6 +14,7 @@ import (
 	"2026_2_PinPals/internal/middleware"
 	"2026_2_PinPals/internal/pins"
 	"2026_2_PinPals/internal/server"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -22,7 +23,7 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
 	ctx := context.Background()
-	pool, err := pgxpool.New(ctx, cfg.Postgres.URL)
+	pool, err := pgxpool.New(ctx, cfg.Postgres.DSN())
 	if err != nil {
 		logger.Error("failed to create postgres pool", "error", err)
 		os.Exit(1)
