@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 )
@@ -20,7 +21,12 @@ type AppConfig struct {
 }
 
 type PostgresConfig struct {
-	URL string
+	Host     string
+	Port     string
+	User     string
+	Password string
+	Database string
+	SSLMode  string
 }
 
 type MinIOConfig struct {
@@ -41,7 +47,12 @@ func MustLoad() *Config {
 			LogLevel: getEnv("LOG_LEVEL", "info"),
 		},
 		Postgres: PostgresConfig{
-			URL: getEnv("DATABASE_URL", ""),
+			Host:     getEnv("POSTGRES_HOST", "postgres"),
+			Port:     getEnv("POSTGRES_INTERNAL_PORT", "5432"),
+			User:     getEnv("POSTGRES_USER", ""),
+			Password: getEnv("POSTGRES_PASSWORD", ""),
+			Database: getEnv("POSTGRES_DB", ""),
+			SSLMode:  getEnv("POSTGRES_SSLMODE", "disable"),
 		},
 		MinIO: MinIOConfig{
 			Endpoint:  getEnv("S3_ENDPOINT", ""),
@@ -52,14 +63,26 @@ func MustLoad() *Config {
 		},
 	}
 
-	if cfg.Postgres.URL == "" {
-		panic("DATABASE_URL is required")
+	if cfg.Postgres.User == "" || cfg.Postgres.Password == "" || cfg.Postgres.Database == "" {
+		panic("POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB are required")
 	}
 	if cfg.MinIO.Endpoint == "" || cfg.MinIO.AccessKey == "" || cfg.MinIO.SecretKey == "" || cfg.MinIO.Bucket == "" {
 		panic("S3_ENDPOINT, S3_ACCESS_KEY, S3_SECRET_KEY, Bucket are required")
 	}
 
 	return cfg
+}
+
+func (p PostgresConfig) DSN() string {
+	return fmt.Sprintf(
+		"postgres://%s:%s@%s:%s/%s?sslmode=%s",
+		url.QueryEscape(p.User),
+		url.QueryEscape(p.Password),
+		p.Host,
+		p.Port,
+		p.Database,
+		p.SSLMode,
+	)
 }
 
 func getEnv(key, fallback string) string {
