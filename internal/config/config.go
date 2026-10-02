@@ -29,12 +29,11 @@ type MinIOConfig struct {
 	SecretKey string
 	Bucket    string
 	UseSSL    bool
-	Region    string
 }
 
-// Load читает переменные окружения и возвращает Config.
-// Если чего-то обязательного нет — возвращает ошибку.
-func Load() (*Config, error) {
+// MustLoad читает переменные окружения и возвращает Config.
+// Если чего-то обязательного нет — выкидывает панику.
+func MustLoad() *Config {
 	cfg := &Config{
 		App: AppConfig{
 			Port:     getEnv("APP_PORT", "8000"),
@@ -49,37 +48,44 @@ func Load() (*Config, error) {
 			AccessKey: getEnv("S3_ACCESS_KEY", ""),
 			SecretKey: getEnv("S3_SECRET_KEY", ""),
 			Bucket:    getEnv("S3_BUCKET", ""),
-			UseSSL:    getEnvBool("S3_USE_SSL", false),
-			Region:    getEnv("S3_REGION", "us-east-1"),
+			UseSSL:    mustGetEnvBool("S3_USE_SSL", false),
 		},
 	}
 
 	if cfg.Postgres.URL == "" {
-		return nil, fmt.Errorf("DATABASE_URL is required")
+		panic("DATABASE_URL is required")
 	}
-	if cfg.MinIO.Endpoint == "" || cfg.MinIO.AccessKey == "" || cfg.MinIO.SecretKey == "" {
-		return nil, fmt.Errorf("S3_ENDPOINT, S3_ACCESS_KEY, S3_SECRET_KEY are required")
+	if cfg.MinIO.Endpoint == "" || cfg.MinIO.AccessKey == "" || cfg.MinIO.SecretKey == "" || cfg.MinIO.Bucket == "" {
+		panic("S3_ENDPOINT, S3_ACCESS_KEY, S3_SECRET_KEY, Bucket are required")
 	}
 
-	return cfg, nil
+	return cfg
 }
 
 func getEnv(key, fallback string) string {
-	v, ok := os.LookupEnv(key);
-	if ok && v != "" {
-		return v
+	value, ok := os.LookupEnv(key)
+	if ok && value != "" {
+		return value
 	}
 	return fallback
 }
 
-func getEnvBool(key string, fallback bool) bool {
+func getEnvBool(key string, fallback bool) (bool, error) {
 	value, ok := os.LookupEnv(key)
 	if !ok || value == "" {
-		return fallback
+		return fallback, nil
 	}
 	boolValue, err := strconv.ParseBool(value)
 	if err != nil {
-		return fallback
+		return false, fmt.Errorf("invalid boolean value for %s=%q: %w", key, value, err)
 	}
-	return boolValue
+	return boolValue, nil
+}
+
+func mustGetEnvBool(key string, fallback bool) bool {
+	value, err := getEnvBool(key, fallback)
+	if err != nil {
+		panic(err)
+	}
+	return value
 }

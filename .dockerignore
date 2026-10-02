@@ -8,6 +8,6 @@ tmp/
 *.exe
 *.log
 README.md
-docker-compose.yml
+docker-compose.yaml
 Dockerfile
 .dockerignore

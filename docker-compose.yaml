@@ -10,7 +10,7 @@ services:
     ports:
       - "${POSTGRES_PORT:-8003}:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
@@ -67,4 +67,3 @@ networks:
 volumes:
   postgres_data:
   minio_data:
-  
