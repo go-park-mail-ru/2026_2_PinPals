@@ -8,7 +8,7 @@ erDiagram
         int user_id PK
         text name
         text user_tag
-        int age
+        date birth_date
         text description
         text avatar_url
         bool deleted

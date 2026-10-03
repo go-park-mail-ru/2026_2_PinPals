@@ -1,3 +1,8 @@
+CREATE TRIGGER trg_user_check_age
+BEFORE INSERT OR UPDATE OF birth_date ON "user"
+FOR EACH ROW
+EXECUTE FUNCTION check_user_age();
+
 CREATE TRIGGER trg_user_updated_at
 BEFORE UPDATE ON "user"
 FOR EACH ROW
