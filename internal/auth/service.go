@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
 	"2026_2_PinPals/internal/model"
+
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -21,6 +23,9 @@ func NewService(repository *Repository) *Service {
 }
 
 func (s *Service) Register(ctx context.Context, input model.RegisterInput) (model.User, error) {
+	input.Name = strings.TrimSpace(input.Name)
+	input.UserTag = strings.TrimSpace(input.UserTag)
+
 	if err := validateRegisterInput(input); err != nil {
 		return model.User{}, err
 	}
@@ -34,15 +39,17 @@ func (s *Service) Register(ctx context.Context, input model.RegisterInput) (mode
 }
 
 func (s *Service) Login(ctx context.Context, input model.LoginInput, issueToken func(userID int) (string, error)) (model.AuthResponse, error) {
-	if strings.TrimSpace(input.UserTag) == "" || input.Password == "" {
+	input.UserTag = strings.TrimSpace(input.UserTag)
+	if input.UserTag == "" || input.Password == "" {
 		return model.AuthResponse{}, ErrValidation
 	}
 
-	user, passwordHash, err := s.repository.GetUserWithPasswordHash(ctx, strings.TrimSpace(input.UserTag))
+	user, passwordHash, err := s.repository.GetUserWithPasswordHash(ctx, input.UserTag)
 	if err != nil {
 		if errors.Is(err, ErrUserNotFound) {
 			return model.AuthResponse{}, ErrInvalidCredentials
 		}
+
 		return model.AuthResponse{}, err
 	}
 
@@ -59,17 +66,45 @@ func (s *Service) Login(ctx context.Context, input model.LoginInput, issueToken 
 }
 
 func validateRegisterInput(input model.RegisterInput) error {
-	if strings.TrimSpace(input.Name) == "" || strings.TrimSpace(input.UserTag) == "" {
+	if input.Name == "" || input.UserTag == "" {
 		return ErrValidation
 	}
-	if input.Age <= 12 {
+
+	if calculateAge(input.BirthDate, time.Now()) < 13 {
 		return ErrValidation
 	}
+
 	if len(input.Password) < 8 {
 		return ErrValidation
 	}
+
 	if len(input.UserTag) > 64 || len(input.Name) > 255 {
 		return ErrValidation
 	}
+
 	return nil
+}
+
+func calculateAge(birthDate, today time.Time) int {
+	birthDate = birthDate.UTC()
+	today = today.UTC()
+
+	age := today.Year() - birthDate.Year()
+
+	birthdayThisYear := time.Date(
+		today.Year(),
+		birthDate.Month(),
+		birthDate.Day(),
+		0,
+		0,
+		0,
+		0,
+		time.UTC,
+	)
+
+	if today.Before(birthdayThisYear) {
+		age--
+	}
+
+	return age
 }

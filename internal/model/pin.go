@@ -8,10 +8,10 @@ type Pin struct {
 	ImageURL    string     `json:"image_url"`
 	Name        string     `json:"name"`
 	Description *string    `json:"description,omitempty"`
-	Deleted     bool       `json:"deleted"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
-	DeletedAt   *time.Time `json:"deleted_at,omitempty"`
+	Deleted     bool       `json:"-"`
+	CreatedAt   time.Time  `json:"-"`
+	UpdatedAt   time.Time  `json:"-"`
+	DeletedAt   *time.Time `json:"-"`
 }
 
 type CreatePinInput struct {

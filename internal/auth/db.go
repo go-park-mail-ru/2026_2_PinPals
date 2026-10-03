@@ -23,41 +23,70 @@ func NewRepository(pool *pgxpool.Pool) *Repository {
 }
 
 func (r *Repository) CreateUser(ctx context.Context, user model.RegisterInput, passwordHash string) (model.User, error) {
-	const query = `
-		INSERT INTO "user" (name, user_tag, age, description, avatar_url)
-		VALUES ($1, $2, $3, $4, $5)
-		RETURNING user_id, name, user_tag, age, description, avatar_url, deleted, created_at, updated_at, deleted_at
-	`
-
 	var result model.User
-	err := r.pool.QueryRow(ctx, query,
-		user.Name,
-		user.UserTag,
-		user.Age,
-		user.Description,
-		user.AvatarURL,
-	).Scan(
-		&result.ID,
-		&result.Name,
-		&result.UserTag,
-		&result.Age,
-		&result.Description,
-		&result.AvatarURL,
-		&result.Deleted,
-		&result.CreatedAt,
-		&result.UpdatedAt,
-		&result.DeletedAt,
-	)
+
+	err := pgx.BeginFunc(ctx, r.pool, func(tx pgx.Tx) error {
+		const query = `
+            INSERT INTO "user" (
+                name,
+                user_tag,
+                birth_date,
+                description,
+                avatar_url
+            )
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING
+                user_id,
+                name,
+                user_tag,
+                birth_date,
+                description,
+                avatar_url,
+                created_at,
+                updated_at,
+                deleted_at
+        `
+
+		err := tx.QueryRow(
+			ctx,
+			query,
+			user.Name,
+			user.UserTag,
+			user.BirthDate,
+			user.Description,
+			user.AvatarURL,
+		).Scan(
+			&result.ID,
+			&result.Name,
+			&result.UserTag,
+			&result.BirthDate,
+			&result.Description,
+			&result.AvatarURL,
+			&result.CreatedAt,
+			&result.UpdatedAt,
+			&result.DeletedAt,
+		)
+
+		if err != nil {
+			return err
+		}
+
+		_, err = tx.Exec(
+			ctx,
+			`INSERT INTO user_auth (user_id, password_hash)
+             VALUES ($1, $2)`,
+			result.ID,
+			passwordHash,
+		)
+
+		return err
+	})
+
 	if err != nil {
 		if isUniqueViolation(err) {
 			return model.User{}, ErrUserTagExists
 		}
-		return model.User{}, err
-	}
 
-	_, err = r.pool.Exec(ctx, `INSERT INTO user_auth (user_id, password_hash) VALUES ($1, $2)`, result.ID, passwordHash)
-	if err != nil {
-		_, _ = r.pool.Exec(ctx, `DELETE FROM "user" WHERE user_id = $1`, result.ID)
 		return model.User{}, err
 	}
 
@@ -66,7 +95,7 @@ func (r *Repository) CreateUser(ctx context.Context, user model.RegisterInput, p
 
 func (r *Repository) GetUserWithPasswordHash(ctx context.Context, userTag string) (model.User, string, error) {
 	const query = `
-		SELECT u.user_id, u.name, u.user_tag, u.age, u.description, u.avatar_url,
+		SELECT u.user_id, u.name, u.user_tag, u.birth_date, u.description, u.avatar_url,
 		       u.deleted, u.created_at, u.updated_at, u.deleted_at, a.password_hash
 		FROM "user" u
 		JOIN user_auth a ON a.user_id = u.user_id
@@ -79,7 +108,7 @@ func (r *Repository) GetUserWithPasswordHash(ctx context.Context, userTag string
 		&user.ID,
 		&user.Name,
 		&user.UserTag,
-		&user.Age,
+		&user.BirthDate,
 		&user.Description,
 		&user.AvatarURL,
 		&user.Deleted,

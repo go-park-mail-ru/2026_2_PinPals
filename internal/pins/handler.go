@@ -1,60 +1,103 @@
 package pins
 
 import (
-	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 
+	"2026_2_PinPals/internal/httpx"
 	"2026_2_PinPals/internal/middleware"
 	"2026_2_PinPals/internal/model"
 )
 
 type Handler struct {
 	service *Service
+	logger  *slog.Logger
 }
 
-func NewHandler(service *Service) *Handler {
-	return &Handler{service: service}
+func NewHandler(service *Service, logger *slog.Logger) *Handler {
+	return &Handler{
+		service: service,
+		logger:  logger,
+	}
 }
 
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	limit := 20
-	offset := 0
-	var err error
 
 	if raw := r.URL.Query().Get("limit"); raw != "" {
-		limit, err = strconv.Atoi(raw)
+		parsedLimit, err := strconv.Atoi(raw)
 		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid limit")
+			httpx.WriteError(w, http.StatusBadRequest, "invalid limit")
 			return
 		}
-	}
-	if raw := r.URL.Query().Get("offset"); raw != "" {
-		offset, err = strconv.Atoi(raw)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid offset")
-			return
-		}
+
+		limit = parsedLimit
 	}
 
-	result, err := h.service.List(r.Context(), limit, offset)
-	if err != nil {
-		if errors.Is(err, ErrValidation) {
-			writeError(w, http.StatusBadRequest, "invalid pagination")
+	var cursor *Cursor
+	if raw := r.URL.Query().Get("cursor"); raw != "" {
+		parsedCursor, err := decodeCursor(raw)
+		if err != nil {
+			httpx.WriteError(w, http.StatusBadRequest, "invalid cursor")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "failed to get pins")
+
+		cursor = parsedCursor
+	}
+
+	page, err := h.service.List(r.Context(), limit, cursor)
+	if err != nil {
+		if errors.Is(err, ErrValidation) {
+			httpx.WriteError(w, http.StatusBadRequest, "invalid pagination")
+			return
+		}
+
+		h.logger.ErrorContext(
+			r.Context(),
+			"failed to get pins",
+			"error", err,
+		)
+
+		httpx.WriteError(w, http.StatusInternalServerError, "failed to get pins")
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"pins": result})
+	response := struct {
+		Pins       []model.Pin `json:"pins"`
+		NextCursor string      `json:"next_cursor,omitempty"`
+	}{
+		Pins: page.Pins,
+	}
+
+	if page.NextCursor != nil {
+		encodedCursor, err := encodeCursor(*page.NextCursor)
+		if err != nil {
+			h.logger.ErrorContext(
+				r.Context(),
+				"failed to encode pins cursor",
+				"error", err,
+			)
+
+			httpx.WriteError(
+				w,
+				http.StatusInternalServerError,
+				"failed to encode cursor",
+			)
+			return
+		}
+
+		response.NextCursor = encodedCursor
+	}
+
+	httpx.WriteJSON(w, http.StatusOK, response)
 }
 
 func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(r.PathValue("pinID"))
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid pin id")
+		httpx.WriteError(w, http.StatusBadRequest, "invalid pin id")
 		return
 	}
 
@@ -62,52 +105,65 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrValidation):
-			writeError(w, http.StatusBadRequest, "invalid pin id")
+			httpx.WriteError(w, http.StatusBadRequest, "invalid pin id")
+
 		case errors.Is(err, ErrPinNotFound):
-			writeError(w, http.StatusNotFound, "pin not found")
+			httpx.WriteError(w, http.StatusNotFound, "pin not found")
+
 		default:
-			writeError(w, http.StatusInternalServerError, "failed to get pin")
+			h.logger.ErrorContext(
+				r.Context(),
+				"failed to get pin",
+				"pin_id", id,
+				"error", err,
+			)
+
+			httpx.WriteError(
+				w,
+				http.StatusInternalServerError,
+				"failed to get pin",
+			)
 		}
+
 		return
 	}
 
-	writeJSON(w, http.StatusOK, pin)
+	httpx.WriteJSON(w, http.StatusOK, pin)
 }
 
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
-		writeError(w, http.StatusUnauthorized, "unauthorized")
+		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
 	var input model.CreatePinInput
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&input); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid json body")
+	if err := httpx.DecodeJSON(w, r, &input); err != nil {
 		return
 	}
 
 	pin, err := h.service.Create(r.Context(), userID, input)
 	if err != nil {
 		if errors.Is(err, ErrValidation) {
-			writeError(w, http.StatusBadRequest, "invalid pin data")
+			httpx.WriteError(w, http.StatusBadRequest, "invalid pin data")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "failed to create pin")
+
+		h.logger.ErrorContext(
+			r.Context(),
+			"failed to create pin",
+			"user_id", userID,
+			"error", err,
+		)
+
+		httpx.WriteError(
+			w,
+			http.StatusInternalServerError,
+			"failed to create pin",
+		)
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, pin)
-}
-
-func writeJSON(w http.ResponseWriter, status int, payload any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(payload)
-}
-
-func writeError(w http.ResponseWriter, status int, message string) {
-	writeJSON(w, status, map[string]string{"error": message})
+	httpx.WriteJSON(w, http.StatusCreated, pin)
 }

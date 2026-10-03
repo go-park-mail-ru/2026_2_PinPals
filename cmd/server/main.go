@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"os"
@@ -20,7 +21,14 @@ import (
 
 func main() {
 	cfg := config.MustLoad()
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	logger := slog.New(
+		slog.NewJSONHandler(
+			os.Stdout,
+			&slog.HandlerOptions{
+				Level: config.ParseLogLevel(cfg.App.LogLevel),
+			},
+		),
+	)
 
 	ctx := context.Background()
 	pool, err := pgxpool.New(ctx, cfg.Postgres.DSN())
@@ -41,11 +49,11 @@ func main() {
 	authService := auth.NewService(authRepository)
 
 	tokenManager := middleware.NewTokenManager([]byte(cfg.Auth.JWTSecret), int64(cfg.Auth.TokenTTL/time.Second))
-	authHandler := auth.NewHandler(authService, tokenManager.Issue)
+	authHandler := auth.NewHandler(authService, tokenManager.Issue, logger)
 
 	pinRepository := pins.NewRepository(pool)
 	pinService := pins.NewService(pinRepository)
-	pinHandler := pins.NewHandler(pinService)
+	pinHandler := pins.NewHandler(pinService, logger)
 
 	handler := server.NewRouter(cfg, logger, authHandler, pinHandler, tokenManager)
 
@@ -63,7 +71,7 @@ func main() {
 
 	go func() {
 		logger.Info("server started", "port", cfg.App.Port)
-		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logger.Error("server stopped unexpectedly", "error", err)
 			os.Exit(1)
 		}

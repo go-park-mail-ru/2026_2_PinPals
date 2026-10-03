@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log/slog"
 	"net/url"
 	"os"
 	"strconv"
@@ -168,4 +169,19 @@ func mustGetEnvBool(key string, fallback bool) bool {
 		panic(err)
 	}
 	return value
+}
+
+func ParseLogLevel(value string) slog.Level {
+	switch strings.ToLower(value) {
+	case "debug":
+		return slog.LevelDebug
+	case "warn", "warning":
+		return slog.LevelWarn
+	case "error":
+		return slog.LevelError
+	case "info":
+		fallthrough
+	default:
+		return slog.LevelInfo
+	}
 }

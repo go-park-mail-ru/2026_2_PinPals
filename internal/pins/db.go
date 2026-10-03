@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"2026_2_PinPals/internal/model"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -38,25 +39,49 @@ func (r *Repository) Create(ctx context.Context, creatorID int, input model.Crea
 		&pin.UpdatedAt,
 		&pin.DeletedAt,
 	)
+
 	return pin, err
 }
 
-func (r *Repository) List(ctx context.Context, limit, offset int) ([]model.Pin, error) {
-	const query = `
+func (r *Repository) List(ctx context.Context, limit int, cursor *Cursor) ([]model.Pin, bool, error) {
+	const baseQuery = `
 		SELECT pin_id, creator_id, image_url, name, description, deleted, created_at, updated_at, deleted_at
 		FROM pin
 		WHERE deleted = false
-		ORDER BY created_at DESC, pin_id DESC
-		LIMIT $1 OFFSET $2
 	`
 
-	rows, err := r.pool.Query(ctx, query, limit, offset)
+	const orderAndLimit = `
+		ORDER BY created_at DESC, pin_id DESC
+		LIMIT $1
+	`
+
+	var (
+		rows    pgx.Rows
+		err     error
+		query   string
+		results []model.Pin
+	)
+
+	if cursor == nil {
+		query = baseQuery + orderAndLimit
+		rows, err = r.pool.Query(ctx, query, limit+1)
+	} else {
+		query = baseQuery + `
+			AND (created_at, pin_id) < ($1, $2)
+		` + `
+			ORDER BY created_at DESC, pin_id DESC
+			LIMIT $3
+		`
+		rows, err = r.pool.Query(ctx, query, cursor.CreatedAt, cursor.ID, limit+1)
+	}
+
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	defer rows.Close()
 
-	pins := make([]model.Pin, 0, limit)
+	results = make([]model.Pin, 0, limit+1)
+
 	for rows.Next() {
 		var pin model.Pin
 		if err := rows.Scan(
@@ -70,14 +95,17 @@ func (r *Repository) List(ctx context.Context, limit, offset int) ([]model.Pin, 
 			&pin.UpdatedAt,
 			&pin.DeletedAt,
 		); err != nil {
-			return nil, err
+			return nil, false, err
 		}
-		pins = append(pins, pin)
+
+		results = append(results, pin)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	return pins, nil
+
+	hasNext := len(results) > limit
+	return results, hasNext, nil
 }
 
 func (r *Repository) GetByID(ctx context.Context, id int) (model.Pin, error) {

@@ -6,22 +6,22 @@ type User struct {
 	ID          int        `json:"user_id"`
 	Name        string     `json:"name"`
 	UserTag     string     `json:"user_tag"`
-	Age         int        `json:"age"`
+	BirthDate   time.Time  `json:"birth_date"`
 	Description *string    `json:"description,omitempty"`
 	AvatarURL   *string    `json:"avatar_url,omitempty"`
-	Deleted     bool       `json:"deleted"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
-	DeletedAt   *time.Time `json:"deleted_at,omitempty"`
+	Deleted     bool       `json:"-"`
+	CreatedAt   time.Time  `json:"-"`
+	UpdatedAt   time.Time  `json:"-"`
+	DeletedAt   *time.Time `json:"-"`
 }
 
 type RegisterInput struct {
-	Name        string  `json:"name"`
-	UserTag     string  `json:"user_tag"`
-	Age         int     `json:"age"`
-	Password    string  `json:"password"`
-	Description *string `json:"description,omitempty"`
-	AvatarURL   *string `json:"avatar_url,omitempty"`
+	Name        string    `json:"name"`
+	UserTag     string    `json:"user_tag"`
+	BirthDate   time.Time `json:"birth_date"`
+	Password    string    `json:"password"`
+	Description *string   `json:"description,omitempty"`
+	AvatarURL   *string   `json:"avatar_url,omitempty"`
 }
 
 type LoginInput struct {
