@@ -31,8 +31,8 @@
 ## 1 Нормальная форма:
 
     User:
-        {user_id}    -> name, user_tag, age, description, avatar_url, created_at, updated_at, deleted_at — первичный сурогатный ключ
-        {user_tag}   -> user_id, name, age, description, avatar_url, created_at, updated_at, deleted_at — естественный ключ (UNIQUE NOT NULL)
+        {user_id}    -> name, user_tag, birth_date, description, avatar_url, created_at, updated_at, deleted_at — первичный сурогатный ключ
+        {user_tag}   -> user_id, name, birth_date, description, avatar_url, created_at, updated_at, deleted_at — естественный ключ (UNIQUE NOT NULL)
 
     Password:
         {password_id} -> password_hash, created_at, updated_at — первичный сурогатный ключ
