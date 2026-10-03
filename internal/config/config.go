@@ -42,13 +42,6 @@ type CORSConfig struct {
 	AllowedOrigins []string
 }
 
-type MinIOConfig struct {
-	Endpoint  string
-	AccessKey string
-	SecretKey string
-	Bucket    string
-	UseSSL    bool
-}
 
 // MustLoad читает переменные окружения и возвращает Config.
 // Если чего-то обязательного нет — выкидывает панику.
@@ -83,11 +76,10 @@ func MustLoad() *Config {
 		},
 	}
 
-	if cfg.Postgres.User == "" || cfg.Postgres.Password == "" || cfg.Postgres.Database == "" {
+	if cfg.Postgres.User == "" ||
+		cfg.Postgres.Password == "" ||
+		cfg.Postgres.Database == "" {
 		panic("POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB are required")
-	}
-	if cfg.MinIO.Endpoint == "" || cfg.MinIO.AccessKey == "" || cfg.MinIO.SecretKey == "" || cfg.MinIO.Bucket == "" {
-		panic("S3_ENDPOINT, S3_ACCESS_KEY, S3_SECRET_KEY, S3_BUCKET are required")
 	}
 
 	if cfg.Auth.JWTSecret == "" {
@@ -95,6 +87,7 @@ func MustLoad() *Config {
 	}
 	if len(cfg.Auth.JWTSecret) < 32 {
 		panic("AUTH_JWT_SECRET must be at least 32 characters long")
+
 	}
 
 	return cfg
@@ -117,6 +110,7 @@ func getEnv(key, fallback string) string {
 	if ok && value != "" {
 		return value
 	}
+
 	return fallback
 }
 
@@ -149,26 +143,6 @@ func getEnvDuration(key string, fallback time.Duration) time.Duration {
 		panic(fmt.Errorf("invalid duration %s=%q: %w", key, value, err))
 	}
 	return duration
-}
-
-func getEnvBool(key string, fallback bool) (bool, error) {
-	value, ok := os.LookupEnv(key)
-	if !ok || value == "" {
-		return fallback, nil
-	}
-	boolValue, err := strconv.ParseBool(value)
-	if err != nil {
-		return false, fmt.Errorf("invalid boolean value for %s=%q: %w", key, value, err)
-	}
-	return boolValue, nil
-}
-
-func mustGetEnvBool(key string, fallback bool) bool {
-	value, err := getEnvBool(key, fallback)
-	if err != nil {
-		panic(err)
-	}
-	return value
 }
 
 func ParseLogLevel(value string) slog.Level {
