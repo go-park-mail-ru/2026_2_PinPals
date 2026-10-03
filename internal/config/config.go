@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"net/url"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -15,7 +14,6 @@ type Config struct {
 	Postgres PostgresConfig
 	Auth     AuthConfig
 	CORS     CORSConfig
-	MinIO    MinIOConfig
 }
 
 type AppConfig struct {
@@ -42,7 +40,6 @@ type CORSConfig struct {
 	AllowedOrigins []string
 }
 
-
 // MustLoad читает переменные окружения и возвращает Config.
 // Если чего-то обязательного нет — выкидывает панику.
 func MustLoad() *Config {
@@ -67,13 +64,6 @@ func MustLoad() *Config {
 		CORS: CORSConfig{
 			AllowedOrigins: getEnvList("CORS_ALLOWED_ORIGINS", []string{"http://localhost:3000"}),
 		},
-		MinIO: MinIOConfig{
-			Endpoint:  getEnv("S3_ENDPOINT", ""),
-			AccessKey: getEnv("S3_ACCESS_KEY", ""),
-			SecretKey: getEnv("S3_SECRET_KEY", ""),
-			Bucket:    getEnv("S3_BUCKET", ""),
-			UseSSL:    mustGetEnvBool("S3_USE_SSL", false),
-		},
 	}
 
 	if cfg.Postgres.User == "" ||
@@ -87,7 +77,6 @@ func MustLoad() *Config {
 	}
 	if len(cfg.Auth.JWTSecret) < 32 {
 		panic("AUTH_JWT_SECRET must be at least 32 characters long")
-
 	}
 
 	return cfg
@@ -110,7 +99,6 @@ func getEnv(key, fallback string) string {
 	if ok && value != "" {
 		return value
 	}
-
 	return fallback
 }
 
