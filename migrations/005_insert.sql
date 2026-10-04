@@ -3,12 +3,12 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 INSERT INTO "user"
     (name, user_tag, birth_date, description, avatar_url)
 VALUES
-    ('Ультра Гигачелов', 'ultra_giga',DATE '2005-03-14', 'Люблю мою крутую девушку', NULL),
+    ('Ультра Гигачелов', 'ultra_giga',DATE '2005-03-14', 'Люблю мою крутую девушку', NULL)
 ON CONFLICT (user_tag) DO NOTHING;
 
 INSERT INTO password (user_id, password_hash)
 VALUES
-    (1, crypt('qwerty123',  gen_salt('bf', 10))),
+    (1, crypt('qwerty123',  gen_salt('bf', 10)))
 ON CONFLICT (user_id) DO NOTHING;
 
 
@@ -48,5 +48,5 @@ VALUES
     (1, 'pin27.jpg', 'Стоковое фото 27', 'Это ты мне?!'),
     (1, 'pin28.jpg', 'Стоковое фото 28', 'Предпредпоследнее описание'),
     (1, 'pin29.jpg', 'Стоковое фото 29', 'Ну нет, ну пожалуйста, нееет'),
-    (1, 'pin30.jpg', 'Стоковое фото 30', 'О да, наконец');
+    (1, 'pin30.jpg', 'Стоковое фото 30', 'О да, наконец')
 ON CONFLICT (image_url) DO NOTHING;

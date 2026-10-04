@@ -1,0 +1,14 @@
+FROM golang:1.27-alpine AS build
+
+RUN go install github.com/jackc/tern/v2@v2.4.2
+
+FROM alpine:3.22
+
+WORKDIR /app
+
+COPY --from=build /go/bin/tern /usr/local/bin/tern
+
+COPY tern.conf ./tern.conf
+COPY migrations ./migrations
+
+ENTRYPOINT ["tern", "migrate", "--config", "tern.conf", "--migrations", "migrations"]
