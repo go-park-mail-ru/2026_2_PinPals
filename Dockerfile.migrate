@@ -8,7 +8,7 @@ WORKDIR /app
 
 COPY --from=build /go/bin/tern /usr/local/bin/tern
 
-COPY tern.conf ./tern.conf
-COPY migrations ./migrations
+COPY db/tern.conf ./tern.conf
+COPY db/migrations ./migrations
 
 ENTRYPOINT ["tern", "migrate", "--config", "tern.conf", "--migrations", "migrations"]
