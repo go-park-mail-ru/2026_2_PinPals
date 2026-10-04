@@ -3,6 +3,7 @@ package auth
 import (
 	"2026_2_PinPals/internal/httpx"
 	"2026_2_PinPals/internal/model"
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -10,13 +11,26 @@ import (
 
 type TokenIssuer func(userID int) (string, error)
 
+type AuthService interface {
+	Register(
+		ctx context.Context,
+		input model.RegisterInput,
+	) (model.User, error)
+
+	Login(
+		ctx context.Context,
+		input model.LoginInput,
+		issueToken func(userID int) (string, error),
+	) (model.AuthResponse, error)
+}
+
 type Handler struct {
-	service     *Service
+	service     AuthService
 	tokenIssuer TokenIssuer
 	logger      *slog.Logger
 }
 
-func NewHandler(service *Service, tokenIssuer TokenIssuer, logger *slog.Logger) *Handler {
+func NewHandler(service AuthService, tokenIssuer TokenIssuer, logger *slog.Logger) *Handler {
 	return &Handler{service: service, tokenIssuer: tokenIssuer, logger: logger}
 }
 
