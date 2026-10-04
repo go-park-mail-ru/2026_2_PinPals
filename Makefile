@@ -1,0 +1,24 @@
+.PHONY: help build run tests fmt up down
+
+help:
+	@echo "Available commands:"
+	@echo "  make build - build backend"
+	@echo "  make run   - start application with docker compose"
+	@echo "  make tests - run tests"
+	@echo "  make fmt   - format Go code"
+	@echo "  make down  - stop docker compose"
+
+build:
+	go build ./cmd/server
+
+run:
+	docker compose up --build
+
+tests:
+	go test ./...
+
+fmt:
+	gofmt -w ./cmd ./internal
+
+down:
+	docker compose down

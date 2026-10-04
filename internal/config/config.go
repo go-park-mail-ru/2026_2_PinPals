@@ -2,15 +2,19 @@ package config
 
 import (
 	"fmt"
+	"log/slog"
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
+	"time"
 )
 
-// Config — вся конфигурация приложения, собранная из переменных окружения.
 type Config struct {
 	App      AppConfig
 	Postgres PostgresConfig
+	Auth     AuthConfig
+	CORS     CORSConfig
 	MinIO    MinIOConfig
 }
 
@@ -27,6 +31,15 @@ type PostgresConfig struct {
 	Password string
 	Database string
 	SSLMode  string
+}
+
+type AuthConfig struct {
+	JWTSecret string
+	TokenTTL  time.Duration
+}
+
+type CORSConfig struct {
+	AllowedOrigins []string
 }
 
 type MinIOConfig struct {
@@ -54,6 +67,13 @@ func MustLoad() *Config {
 			Database: getEnv("POSTGRES_DB", ""),
 			SSLMode:  getEnv("POSTGRES_SSLMODE", "disable"),
 		},
+		Auth: AuthConfig{
+			JWTSecret: getEnv("AUTH_JWT_SECRET", ""),
+			TokenTTL:  getEnvDuration("AUTH_TOKEN_TTL", 24*time.Hour),
+		},
+		CORS: CORSConfig{
+			AllowedOrigins: getEnvList("CORS_ALLOWED_ORIGINS", []string{"http://localhost:3000"}),
+		},
 		MinIO: MinIOConfig{
 			Endpoint:  getEnv("S3_ENDPOINT", ""),
 			AccessKey: getEnv("S3_ACCESS_KEY", ""),
@@ -67,7 +87,14 @@ func MustLoad() *Config {
 		panic("POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB are required")
 	}
 	if cfg.MinIO.Endpoint == "" || cfg.MinIO.AccessKey == "" || cfg.MinIO.SecretKey == "" || cfg.MinIO.Bucket == "" {
-		panic("S3_ENDPOINT, S3_ACCESS_KEY, S3_SECRET_KEY, Bucket are required")
+		panic("S3_ENDPOINT, S3_ACCESS_KEY, S3_SECRET_KEY, S3_BUCKET are required")
+	}
+
+	if cfg.Auth.JWTSecret == "" {
+		panic("AUTH_JWT_SECRET is required")
+	}
+	if len(cfg.Auth.JWTSecret) < 32 {
+		panic("AUTH_JWT_SECRET must be at least 32 characters long")
 	}
 
 	return cfg
@@ -93,6 +120,37 @@ func getEnv(key, fallback string) string {
 	return fallback
 }
 
+func getEnvList(key string, fallback []string) []string {
+	value, ok := os.LookupEnv(key)
+	if !ok || strings.TrimSpace(value) == "" {
+		return fallback
+	}
+	parts := strings.Split(value, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			result = append(result, part)
+		}
+	}
+	if len(result) == 0 {
+		return fallback
+	}
+	return result
+}
+
+func getEnvDuration(key string, fallback time.Duration) time.Duration {
+	value, ok := os.LookupEnv(key)
+	if !ok || value == "" {
+		return fallback
+	}
+	duration, err := time.ParseDuration(value)
+	if err != nil {
+		panic(fmt.Errorf("invalid duration %s=%q: %w", key, value, err))
+	}
+	return duration
+}
+
 func getEnvBool(key string, fallback bool) (bool, error) {
 	value, ok := os.LookupEnv(key)
 	if !ok || value == "" {
@@ -111,4 +169,19 @@ func mustGetEnvBool(key string, fallback bool) bool {
 		panic(err)
 	}
 	return value
+}
+
+func ParseLogLevel(value string) slog.Level {
+	switch strings.ToLower(value) {
+	case "debug":
+		return slog.LevelDebug
+	case "warn", "warning":
+		return slog.LevelWarn
+	case "error":
+		return slog.LevelError
+	case "info":
+		fallthrough
+	default:
+		return slog.LevelInfo
+	}
 }
