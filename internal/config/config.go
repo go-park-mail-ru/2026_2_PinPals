@@ -66,9 +66,7 @@ func MustLoad() *Config {
 		},
 	}
 
-	if cfg.Postgres.User == "" ||
-		cfg.Postgres.Password == "" ||
-		cfg.Postgres.Database == "" {
+	if cfg.Postgres.User == "" || cfg.Postgres.Password == "" || cfg.Postgres.Database == "" {
 		panic("POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB are required")
 	}
 
