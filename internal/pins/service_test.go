@@ -72,7 +72,7 @@ func TestCreatePin(t *testing.T) {
 		context.Background(),
 		42,
 		model.CreatePinInput{
-			ImageURL:    " https://example.com/image.jpg ",
+			ImageURL:    " 1.jpg ",
 			Name:        "  Beach  ",
 			Description: &description,
 		},
@@ -86,7 +86,7 @@ func TestCreatePin(t *testing.T) {
 		t.Fatalf("expected creator id 42, got %d", pin.CreatorID)
 	}
 
-	if pin.ImageURL != "https://example.com/image.jpg" {
+	if pin.ImageURL != "1.jpg" {
 		t.Fatalf("unexpected image url: %q", pin.ImageURL)
 	}
 

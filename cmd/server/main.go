@@ -12,6 +12,7 @@ import (
 
 	"2026_2_PinPals/internal/auth"
 	"2026_2_PinPals/internal/config"
+	"2026_2_PinPals/internal/images"
 	"2026_2_PinPals/internal/middleware"
 	"2026_2_PinPals/internal/pins"
 	"2026_2_PinPals/internal/server"
@@ -53,9 +54,11 @@ func main() {
 
 	pinRepository := pins.NewRepository(pool)
 	pinService := pins.NewService(pinRepository)
-	pinHandler := pins.NewHandler(pinService, logger)
+	pinHandler := pins.NewHandler(pinService, logger, cfg.App.BaseURL)
 
-	handler := server.NewRouter(cfg, logger, authHandler, pinHandler, tokenManager)
+	imageHandler := images.NewHandler(cfg.App.ImageDir)
+
+	handler := server.NewRouter(cfg, logger, authHandler, pinHandler, imageHandler, tokenManager)
 
 	httpServer := &http.Server{
 		Addr:              ":" + cfg.App.Port,
