@@ -103,7 +103,13 @@ func TestNewRouter(t *testing.T) {
 	})
 
 	t.Run("pin list", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/pins", nil)
+		req := httptest.NewRequest(
+			http.MethodPost,
+			"/api/v1/pins/search",
+			bytes.NewBufferString(`{}`),
+		)
+		req.Header.Set("Content-Type", "application/json")
+
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
 		if rec.Code != http.StatusOK {
