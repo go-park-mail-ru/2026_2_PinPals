@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS "user" (
 
 COMMENT ON TABLE "user" IS 'Учётные записи пользователей';
 COMMENT ON COLUMN "user".user_tag IS 'Уникальный тег для поиска';
-COMMENT ON COLUMN "user".avatar_url IS 'Ссылка на аватар в MinIO';
+COMMENT ON COLUMN "user".avatar_url IS 'Ссылка на аватар';
 COMMENT ON COLUMN "user".deleted IS 'Так реализован soft delete: если delete = true — запись удалёна';
 COMMENT ON COLUMN "user".deleted_at IS 'Момент soft delete; Если NULL, то запись активна';
 
@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS pin (
 );
 
 COMMENT ON TABLE pin IS 'Пины — публикации изображений';
-COMMENT ON COLUMN pin.image_url IS 'Ссылка на изображение в MinIO';
+COMMENT ON COLUMN pin.image_url IS 'Имя файла изображения пина';
 COMMENT ON COLUMN pin.deleted IS 'Так реализован soft delete: если deleted = true — запись удалена';
 COMMENT ON COLUMN pin.deleted_at IS 'Момент soft delete; Если NULL, то запись активна';
 

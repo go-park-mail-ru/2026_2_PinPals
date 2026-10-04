@@ -3,12 +3,34 @@ package pins
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"strings"
 
 	"2026_2_PinPals/internal/model"
 )
 
 var ErrValidation = errors.New("validation error")
+
+func isValidImageName(name string) bool {
+	if name == "" {
+		return false
+	}
+
+	if filepath.Base(name) != name {
+		return false
+	}
+
+	if strings.ContainsAny(name, `/\`) {
+		return false
+	}
+
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".jpg", ".jpeg", ".png", ".gif", ".webp":
+		return true
+	default:
+		return false
+	}
+}
 
 type PinRepository interface {
 	Create(
@@ -41,7 +63,11 @@ func (s *Service) Create(ctx context.Context, creatorID int, input model.CreateP
 	input.ImageURL = strings.TrimSpace(input.ImageURL)
 	input.Name = strings.TrimSpace(input.Name)
 
-	if input.ImageURL == "" || input.Name == "" {
+	if !isValidImageName(input.ImageURL) {
+		return model.Pin{}, ErrValidation
+	}
+
+	if input.Name == "" {
 		return model.Pin{}, ErrValidation
 	}
 	if len(input.Name) > 255 {

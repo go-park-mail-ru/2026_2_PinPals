@@ -173,6 +173,36 @@ func TestGetByIDHandler(t *testing.T) {
 	}
 }
 
+func TestGetByIDHandlerUsesConfiguredBaseURL(t *testing.T) {
+	handler := NewHandler(
+		NewService(&fakePinRepository{
+			getResult: model.Pin{ID: 42, ImageURL: "1.png"},
+		}),
+		pinsTestLogger(),
+		"https://api.example.com",
+	)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/pins/42", nil)
+	req.Host = "internal:8080"
+	req.SetPathValue("pinID", "42")
+	rec := httptest.NewRecorder()
+
+	handler.GetByID(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	var body model.Pin
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+
+	if body.ImageURL != "https://api.example.com/images/1.png" {
+		t.Fatalf("unexpected image url: %q", body.ImageURL)
+	}
+}
+
 func TestCreateHandler(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -181,11 +211,11 @@ func TestCreateHandler(t *testing.T) {
 		auth       bool
 		wantStatus int
 	}{
-		{"unauthorized", `{"image_url":"x","name":"Beach"}`, &fakePinRepository{}, false, http.StatusUnauthorized},
+		{"unauthorized", `{"image_url":"x.png","name":"Beach"}`, &fakePinRepository{}, false, http.StatusUnauthorized},
 		{"bad json", `{`, &fakePinRepository{}, true, http.StatusBadRequest},
 		{"validation", `{"image_url":"","name":"Beach"}`, &fakePinRepository{}, true, http.StatusBadRequest},
-		{"repository error", `{"image_url":"x","name":"Beach"}`, &fakePinRepository{createErr: errors.New("database error")}, true, http.StatusInternalServerError},
-		{"success", `{"image_url":"x","name":"Beach"}`, &fakePinRepository{}, true, http.StatusCreated},
+		{"repository error", `{"image_url":"x.png","name":"Beach"}`, &fakePinRepository{createErr: errors.New("database error")}, true, http.StatusInternalServerError},
+		{"success", `{"image_url":"x.png","name":"Beach"}`, &fakePinRepository{}, true, http.StatusCreated},
 	}
 
 	for _, tt := range tests {

@@ -12,10 +12,6 @@ func setValidEnv(t *testing.T) {
 	t.Setenv("POSTGRES_USER", "user")
 	t.Setenv("POSTGRES_PASSWORD", "pass word")
 	t.Setenv("POSTGRES_DB", "db")
-	t.Setenv("S3_ENDPOINT", "minio:9000")
-	t.Setenv("S3_ACCESS_KEY", "access")
-	t.Setenv("S3_SECRET_KEY", "secret")
-	t.Setenv("S3_BUCKET", "pins")
 	t.Setenv("AUTH_JWT_SECRET", "12345678901234567890123456789012")
 }
 
@@ -39,7 +35,6 @@ func TestMustLoadAndDefaults(t *testing.T) {
 	os.Unsetenv("POSTGRES_SSLMODE")
 	os.Unsetenv("AUTH_TOKEN_TTL")
 	os.Unsetenv("CORS_ALLOWED_ORIGINS")
-	os.Unsetenv("S3_USE_SSL")
 
 	cfg := MustLoad()
 
@@ -55,8 +50,8 @@ func TestMustLoadAndDefaults(t *testing.T) {
 	if len(cfg.CORS.AllowedOrigins) != 1 || cfg.CORS.AllowedOrigins[0] != "http://localhost:3000" {
 		t.Fatalf("unexpected cors defaults: %#v", cfg.CORS.AllowedOrigins)
 	}
-	if cfg.MinIO.UseSSL {
-		t.Fatal("expected UseSSL=false by default")
+	if cfg.App.ImageDir != "./images" {
+		t.Fatalf("unexpected image dir: %q", cfg.App.ImageDir)
 	}
 }
 
@@ -70,7 +65,6 @@ func TestMustLoadCustomValues(t *testing.T) {
 	t.Setenv("POSTGRES_SSLMODE", "require")
 	t.Setenv("AUTH_TOKEN_TTL", "2h")
 	t.Setenv("CORS_ALLOWED_ORIGINS", " http://a.example, ,http://b.example ")
-	t.Setenv("S3_USE_SSL", "true")
 
 	cfg := MustLoad()
 
@@ -80,8 +74,8 @@ func TestMustLoadCustomValues(t *testing.T) {
 	if cfg.Postgres.Host != "db" || cfg.Postgres.Port != "5433" || cfg.Postgres.SSLMode != "require" {
 		t.Fatalf("unexpected postgres config: %#v", cfg.Postgres)
 	}
-	if cfg.Auth.TokenTTL != 2*time.Hour || !cfg.MinIO.UseSSL {
-		t.Fatalf("unexpected custom values: ttl=%v ssl=%v", cfg.Auth.TokenTTL, cfg.MinIO.UseSSL)
+	if cfg.Auth.TokenTTL != 2*time.Hour {
+		t.Fatalf("unexpected custom values: ttl=%v", cfg.Auth.TokenTTL)
 	}
 	if len(cfg.CORS.AllowedOrigins) != 2 {
 		t.Fatalf("unexpected origins: %#v", cfg.CORS.AllowedOrigins)
@@ -98,13 +92,6 @@ func TestMustLoadValidationPanics(t *testing.T) {
 			func(t *testing.T) {
 				setValidEnv(t)
 				os.Unsetenv("POSTGRES_USER")
-			},
-		},
-		{
-			"missing minio",
-			func(t *testing.T) {
-				setValidEnv(t)
-				os.Unsetenv("S3_BUCKET")
 			},
 		},
 		{
@@ -126,13 +113,6 @@ func TestMustLoadValidationPanics(t *testing.T) {
 			func(t *testing.T) {
 				setValidEnv(t)
 				t.Setenv("AUTH_TOKEN_TTL", "not-a-duration")
-			},
-		},
-		{
-			"bad bool",
-			func(t *testing.T) {
-				setValidEnv(t)
-				t.Setenv("S3_USE_SSL", "not-a-bool")
 			},
 		},
 	}
@@ -166,17 +146,6 @@ func TestDSNAndHelpers(t *testing.T) {
 	dsn := p.DSN()
 	if !strings.Contains(dsn, "user+name") || !strings.Contains(dsn, "pass%40word") {
 		t.Fatalf("unexpected dsn: %s", dsn)
-	}
-
-	t.Setenv("TEST_BOOL", "true")
-	ok, err := getEnvBool("TEST_BOOL", false)
-	if err != nil || !ok {
-		t.Fatalf("unexpected bool: %v %v", ok, err)
-	}
-
-	t.Setenv("TEST_BOOL", "bad")
-	if _, err := getEnvBool("TEST_BOOL", false); err == nil {
-		t.Fatal("expected bool parsing error")
 	}
 
 	t.Setenv("TEST_DURATION", "15m")

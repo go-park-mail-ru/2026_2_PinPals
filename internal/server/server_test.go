@@ -11,6 +11,7 @@ import (
 
 	"2026_2_PinPals/internal/auth"
 	"2026_2_PinPals/internal/config"
+	"2026_2_PinPals/internal/images"
 	"2026_2_PinPals/internal/middleware"
 	"2026_2_PinPals/internal/model"
 	"2026_2_PinPals/internal/pins"
@@ -68,6 +69,7 @@ func TestNewRouter(t *testing.T) {
 		pins.NewService(fakeServerPinRepository{}),
 		logger,
 	)
+	imageHandler := images.NewHandler(t.TempDir())
 	tokenManager := middleware.NewTokenManager(
 		[]byte("12345678901234567890123456789012"),
 		3600,
@@ -79,7 +81,7 @@ func TestNewRouter(t *testing.T) {
 		},
 	}
 
-	handler := NewRouter(cfg, logger, authHandler, pinHandler, tokenManager)
+	handler := NewRouter(cfg, logger, authHandler, pinHandler, imageHandler, tokenManager)
 
 	t.Run("health", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
@@ -121,7 +123,7 @@ func TestNewRouter(t *testing.T) {
 		req := httptest.NewRequest(
 			http.MethodPost,
 			"/api/v1/pins",
-			bytes.NewBufferString(`{"image_url":"x","name":"Beach"}`),
+			bytes.NewBufferString(`{"image_url":"x.png","name":"Beach"}`),
 		)
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
@@ -140,7 +142,7 @@ func TestNewRouter(t *testing.T) {
 		req := httptest.NewRequest(
 			http.MethodPost,
 			"/api/v1/pins",
-			bytes.NewBufferString(`{"image_url":"x","name":"Beach"}`),
+			bytes.NewBufferString(`{"image_url":"x.png","name":"Beach"}`),
 		)
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+token)

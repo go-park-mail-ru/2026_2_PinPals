@@ -5,7 +5,9 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 
 	"2026_2_PinPals/internal/httpx"
 	"2026_2_PinPals/internal/middleware"
@@ -34,13 +36,18 @@ type PinService interface {
 type Handler struct {
 	service PinService
 	logger  *slog.Logger
+	baseURL string
 }
 
-func NewHandler(service *Service, logger *slog.Logger) *Handler {
-	return &Handler{
+func NewHandler(service *Service, logger *slog.Logger, baseURL ...string) *Handler {
+	handler := &Handler{
 		service: service,
 		logger:  logger,
 	}
+	if len(baseURL) > 0 {
+		handler.baseURL = strings.TrimRight(baseURL[0], "/")
+	}
+	return handler
 }
 
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
@@ -88,11 +95,17 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	pins := make([]model.Pin, len(page.Pins))
+
+	for i, pin := range page.Pins {
+		pins[i] = h.withImageURL(r, pin)
+	}
+
 	response := struct {
 		Pins       []model.Pin `json:"pins"`
 		NextCursor *Cursor     `json:"next_cursor,omitempty"`
 	}{
-		Pins:       page.Pins,
+		Pins:       pins,
 		NextCursor: page.NextCursor,
 	}
 
@@ -129,9 +142,10 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 				"failed to get pin",
 			)
 		}
-
 		return
 	}
+
+	pin = h.withImageURL(r, pin)
 
 	httpx.WriteJSON(w, http.StatusOK, pin)
 }
@@ -170,5 +184,30 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	pin = h.withImageURL(r, pin)
+
 	httpx.WriteJSON(w, http.StatusCreated, pin)
+}
+
+func (h *Handler) withImageURL(r *http.Request, pin model.Pin) model.Pin {
+	if h.baseURL != "" {
+		pin.ImageURL = h.baseURL + "/images/" + url.PathEscape(pin.ImageURL)
+		return pin
+	}
+
+	scheme := "http"
+
+	if r.TLS != nil {
+		scheme = "https"
+	}
+
+	if forwardedProto := r.Header.Get("X-Forwarded-Proto"); forwardedProto == "http" || forwardedProto == "https" {
+		scheme = forwardedProto
+	}
+
+	host := r.Host
+
+	pin.ImageURL = scheme + "://" + host + "/images/" + url.PathEscape(pin.ImageURL)
+
+	return pin
 }
