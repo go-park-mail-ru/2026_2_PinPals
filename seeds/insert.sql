@@ -11,7 +11,7 @@ VALUES
     ('Иван Петров','ivan_petrov', DATE '1999-11-17', 'Просто Иван Петров', NULL)
 ON CONFLICT (user_tag) DO NOTHING;
 
-INSERT INTO user_auth (user_id, password_hash)
+INSERT INTO password (user_id, password_hash)
 VALUES
     (1, crypt('qwerty123',  gen_salt('bf', 10))),
     (2, crypt('password1',  gen_salt('bf', 10))),
