@@ -28,9 +28,8 @@ func NewRouter(
 	mux.HandleFunc("POST /api/v1/auth/register", authHandler.Register)
 	mux.HandleFunc("POST /api/v1/auth/login", authHandler.Login)
 
-	mux.HandleFunc("GET /api/v1/pins", pinHandler.List)
+	mux.HandleFunc("POST /api/v1/pins/search", pinHandler.List)
 	mux.HandleFunc("GET /api/v1/pins/{pinID}", pinHandler.GetByID)
-
 	mux.Handle(
 		"POST /api/v1/pins",
 		tokenManager.Middleware(http.HandlerFunc(pinHandler.Create)),

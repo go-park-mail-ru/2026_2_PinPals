@@ -44,27 +44,27 @@ func NewHandler(service *Service, logger *slog.Logger) *Handler {
 }
 
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
-	limit := 20
-
-	if raw := r.URL.Query().Get("limit"); raw != "" {
-		parsedLimit, err := strconv.Atoi(raw)
-		if err != nil {
-			httpx.WriteError(w, http.StatusBadRequest, "invalid limit")
-			return
-		}
-
-		limit = parsedLimit
+	type ListInput struct {
+		Limit  *int    `json:"limit"`
+		Cursor *Cursor `json:"cursor"`
 	}
 
-	var cursor *Cursor
-	if raw := r.URL.Query().Get("cursor"); raw != "" {
-		parsedCursor, err := decodeCursor(raw)
-		if err != nil {
+	var input ListInput
+	if err := httpx.DecodeJSON(w, r, &input); err != nil {
+		return
+	}
+
+	limit := 20
+	if input.Limit != nil {
+		limit = *input.Limit
+	}
+
+	cursor := input.Cursor
+	if cursor != nil {
+		if cursor.ID < 1 || cursor.CreatedAt.IsZero() {
 			httpx.WriteError(w, http.StatusBadRequest, "invalid cursor")
 			return
 		}
-
-		cursor = parsedCursor
 	}
 
 	page, err := h.service.List(r.Context(), limit, cursor)
@@ -80,35 +80,20 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 			"error", err,
 		)
 
-		httpx.WriteError(w, http.StatusInternalServerError, "failed to get pins")
+		httpx.WriteError(
+			w,
+			http.StatusInternalServerError,
+			"failed to get pins",
+		)
 		return
 	}
 
 	response := struct {
 		Pins       []model.Pin `json:"pins"`
-		NextCursor string      `json:"next_cursor,omitempty"`
+		NextCursor *Cursor     `json:"next_cursor,omitempty"`
 	}{
-		Pins: page.Pins,
-	}
-
-	if page.NextCursor != nil {
-		encodedCursor, err := encodeCursor(*page.NextCursor)
-		if err != nil {
-			h.logger.ErrorContext(
-				r.Context(),
-				"failed to encode pins cursor",
-				"error", err,
-			)
-
-			httpx.WriteError(
-				w,
-				http.StatusInternalServerError,
-				"failed to encode cursor",
-			)
-			return
-		}
-
-		response.NextCursor = encodedCursor
+		Pins:       page.Pins,
+		NextCursor: page.NextCursor,
 	}
 
 	httpx.WriteJSON(w, http.StatusOK, response)
