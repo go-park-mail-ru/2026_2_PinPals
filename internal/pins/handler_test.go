@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
@@ -26,12 +25,14 @@ func TestListHandler(t *testing.T) {
 	tests := []struct {
 		name       string
 		target     string
+		body       string
 		repo       *fakePinRepository
 		wantStatus int
 	}{
 		{
 			name:   "default success",
-			target: "/api/v1/pins",
+			target: "/api/v1/pins/search",
+			body:   `{}`,
 			repo: &fakePinRepository{
 				listResult: []model.Pin{{ID: 1, CreatedAt: now}},
 			},
@@ -39,25 +40,29 @@ func TestListHandler(t *testing.T) {
 		},
 		{
 			name:       "invalid limit",
-			target:     "/api/v1/pins?limit=nope",
+			target:     "/api/v1/pins/search",
+			body:       `{"limit":0}`,
 			repo:       &fakePinRepository{},
 			wantStatus: http.StatusBadRequest,
 		},
 		{
 			name:       "invalid cursor",
-			target:     "/api/v1/pins?cursor=bad",
+			target:     "/api/v1/pins/search",
+			body:       `{"cursor":{"id":0,"created_at":"2026-10-04T00:00:00Z"}}`,
 			repo:       &fakePinRepository{},
 			wantStatus: http.StatusBadRequest,
 		},
 		{
 			name:       "service validation",
-			target:     "/api/v1/pins?limit=0",
+			target:     "/api/v1/pins/search",
+			body:       `{"limit":0}`,
 			repo:       &fakePinRepository{},
 			wantStatus: http.StatusBadRequest,
 		},
 		{
 			name:   "repository error",
-			target: "/api/v1/pins",
+			target: "/api/v1/pins/search",
+			body:   `{}`,
 			repo: &fakePinRepository{
 				listErr: errors.New("database error"),
 			},
@@ -70,7 +75,13 @@ func TestListHandler(t *testing.T) {
 			service := NewService(tt.repo)
 			handler := NewHandler(service, pinsTestLogger())
 
-			req := httptest.NewRequest(http.MethodGet, tt.target, nil)
+			req := httptest.NewRequest(
+				http.MethodPost,
+				tt.target,
+				bytes.NewBufferString(tt.body),
+			)
+			req.Header.Set("Content-Type", "application/json")
+
 			rec := httptest.NewRecorder()
 
 			handler.List(rec, req)
@@ -94,7 +105,13 @@ func TestListHandlerNextCursor(t *testing.T) {
 	}
 	handler := NewHandler(NewService(repo), pinsTestLogger())
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/pins?limit=2", nil)
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/pins/search",
+		bytes.NewBufferString(`{"limit":2}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+
 	rec := httptest.NewRecorder()
 	handler.List(rec, req)
 
@@ -103,13 +120,26 @@ func TestListHandlerNextCursor(t *testing.T) {
 	}
 	var body struct {
 		Pins       []model.Pin `json:"pins"`
-		NextCursor string      `json:"next_cursor"`
+		NextCursor *Cursor     `json:"next_cursor"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}
-	if len(body.Pins) != 2 || body.NextCursor == "" {
-		t.Fatalf("unexpected response: %#v", body)
+
+	if len(body.Pins) != 2 {
+		t.Fatalf("expected 2 pins, got %d", len(body.Pins))
+	}
+
+	if body.NextCursor == nil {
+		t.Fatal("expected next cursor")
+	}
+
+	if body.NextCursor.ID != 2 {
+		t.Fatalf("expected next cursor id 2, got %d", body.NextCursor.ID)
+	}
+
+	if !body.NextCursor.CreatedAt.Equal(now.Add(-time.Minute)) {
+		t.Fatalf("unexpected next cursor timestamp: %v", body.NextCursor.CreatedAt)
 	}
 }
 
@@ -204,10 +234,6 @@ func TestListHandlerWithCursor(t *testing.T) {
 		CreatedAt: time.Date(2026, 10, 4, 0, 0, 0, 0, time.UTC),
 		ID:        10,
 	}
-	encoded, err := encodeCursor(cursor)
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	repo := &fakePinRepository{
 		listResult: []model.Pin{{ID: 9, CreatedAt: cursor.CreatedAt.Add(-time.Minute)}},
@@ -215,10 +241,12 @@ func TestListHandlerWithCursor(t *testing.T) {
 	handler := NewHandler(NewService(repo), pinsTestLogger())
 
 	req := httptest.NewRequest(
-		http.MethodGet,
-		"/api/v1/pins?cursor="+strings.TrimSpace(encoded),
-		nil,
+		http.MethodPost,
+		"/api/v1/pins/search",
+		bytes.NewBufferString(`{"cursor": {"created_at": "2026-10-04T00:00:00Z","id": 10}}`),
 	)
+	req.Header.Set("Content-Type", "application/json")
+
 	rec := httptest.NewRecorder()
 
 	handler.List(rec, req)
