@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"time"
+	"unicode"
 
 	"2026_2_PinPals/internal/model"
 
@@ -14,11 +15,24 @@ import (
 var ErrInvalidCredentials = errors.New("invalid credentials")
 var ErrValidation = errors.New("validation error")
 
-type Service struct {
-	repository *Repository
+type UserRepository interface {
+	CreateUser(
+		ctx context.Context,
+		user model.RegisterInput,
+		passwordHash string,
+	) (model.User, error)
+
+	GetUserWithPasswordHash(
+		ctx context.Context,
+		userTag string,
+	) (model.User, string, error)
 }
 
-func NewService(repository *Repository) *Service {
+type Service struct {
+	repository UserRepository
+}
+
+func NewService(repository UserRepository) *Service {
 	return &Service{repository: repository}
 }
 
@@ -26,7 +40,7 @@ func (s *Service) Register(ctx context.Context, input model.RegisterInput) (mode
 	input.Name = strings.TrimSpace(input.Name)
 	input.UserTag = strings.TrimSpace(input.UserTag)
 
-	if err := validateRegisterInput(input); err != nil {
+	if err := validateRegisterInput(input, time.Now()); err != nil {
 		return model.User{}, err
 	}
 
@@ -65,16 +79,16 @@ func (s *Service) Login(ctx context.Context, input model.LoginInput, issueToken 
 	return model.AuthResponse{Token: token, User: user}, nil
 }
 
-func validateRegisterInput(input model.RegisterInput) error {
+func validateRegisterInput(input model.RegisterInput, now time.Time) error {
 	if input.Name == "" || input.UserTag == "" {
 		return ErrValidation
 	}
 
-	if calculateAge(input.BirthDate, time.Now()) < 13 {
+	if calculateAge(input.BirthDate, now) < 13 {
 		return ErrValidation
 	}
 
-	if len(input.Password) < 8 {
+	if len(input.Password) < 8 || !hasLetter(input.Password) {
 		return ErrValidation
 	}
 
@@ -107,4 +121,13 @@ func calculateAge(birthDate, today time.Time) int {
 	}
 
 	return age
+}
+
+func hasLetter(s string) bool {
+	for _, r := range s {
+		if unicode.IsLetter(r) {
+			return true
+		}
+	}
+	return false
 }

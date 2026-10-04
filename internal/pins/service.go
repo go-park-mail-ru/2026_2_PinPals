@@ -10,11 +10,30 @@ import (
 
 var ErrValidation = errors.New("validation error")
 
-type Service struct {
-	repository *Repository
+type PinRepository interface {
+	Create(
+		ctx context.Context,
+		creatorID int,
+		input model.CreatePinInput,
+	) (model.Pin, error)
+
+	List(
+		ctx context.Context,
+		limit int,
+		cursor *Cursor,
+	) ([]model.Pin, bool, error)
+
+	GetByID(
+		ctx context.Context,
+		id int,
+	) (model.Pin, error)
 }
 
-func NewService(repository *Repository) *Service {
+type Service struct {
+	repository PinRepository
+}
+
+func NewService(repository PinRepository) *Service {
 	return &Service{repository: repository}
 }
 

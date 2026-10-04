@@ -1,6 +1,7 @@
 package pins
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -11,8 +12,27 @@ import (
 	"2026_2_PinPals/internal/model"
 )
 
+type PinService interface {
+	Create(
+		ctx context.Context,
+		creatorID int,
+		input model.CreatePinInput,
+	) (model.Pin, error)
+
+	List(
+		ctx context.Context,
+		limit int,
+		cursor *Cursor,
+	) (Page, error)
+
+	GetByID(
+		ctx context.Context,
+		id int,
+	) (model.Pin, error)
+}
+
 type Handler struct {
-	service *Service
+	service PinService
 	logger  *slog.Logger
 }
 
