@@ -14,11 +14,11 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/app ./cmd/server/main.go
 
 # ---------- Этап запуска ----------
-FROM alpine:3.20
+FROM --platform=linux/amd64 alpine:3.20
 
 WORKDIR /app
 
-COPY --from=builder /out/app /app/app
+COPY --from=builder --chmod=755 /out/app /app/app
 
 EXPOSE 8080
 
