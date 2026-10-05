@@ -18,8 +18,10 @@ type Config struct {
 
 type AppConfig struct {
 	Port     string
+	BaseURL  string
 	Env      string
 	LogLevel string
+	ImageDir string
 }
 
 type PostgresConfig struct {
@@ -41,13 +43,17 @@ type CORSConfig struct {
 }
 
 // MustLoad читает переменные окружения и возвращает Config.
-// Если чего-то обязательного нет — выкидывает панику.
+// Если обязательной настройки нет или она некорректна — вызывает panic.
 func MustLoad() *Config {
+	appPort := getEnv("APP_PORT", "8000")
+
 	cfg := &Config{
 		App: AppConfig{
-			Port:     getEnv("APP_PORT", "8000"),
+			Port:     appPort,
+			BaseURL:  getEnv("APP_BASE_URL", "http://127.0.0.1:"+appPort),
 			Env:      getEnv("APP_ENV", "development"),
 			LogLevel: getEnv("LOG_LEVEL", "info"),
+			ImageDir: getEnv("IMAGE_DIR", "./images"),
 		},
 		Postgres: PostgresConfig{
 			Host:     getEnv("POSTGRES_HOST", "postgres"),
@@ -62,7 +68,10 @@ func MustLoad() *Config {
 			TokenTTL:  getEnvDuration("AUTH_TOKEN_TTL", 24*time.Hour),
 		},
 		CORS: CORSConfig{
-			AllowedOrigins: getEnvList("CORS_ALLOWED_ORIGINS", []string{"http://localhost:3000"}),
+			AllowedOrigins: getEnvList(
+				"CORS_ALLOWED_ORIGINS",
+				[]string{"http://localhost:3000"},
+			),
 		},
 	}
 
@@ -70,14 +79,36 @@ func MustLoad() *Config {
 		panic("POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB are required")
 	}
 
+	validateBaseURL(cfg.App.BaseURL)
+
 	if cfg.Auth.JWTSecret == "" {
 		panic("AUTH_JWT_SECRET is required")
 	}
+
 	if len(cfg.Auth.JWTSecret) < 32 {
 		panic("AUTH_JWT_SECRET must be at least 32 characters long")
 	}
 
 	return cfg
+}
+
+func validateBaseURL(value string) {
+	u, err := url.Parse(value)
+	if err != nil {
+		panic(fmt.Errorf("invalid APP_BASE_URL=%q: %w", value, err))
+	}
+
+	if u.Scheme != "http" && u.Scheme != "https" {
+		panic("APP_BASE_URL must use http or https")
+	}
+
+	if u.Host == "" {
+		panic("APP_BASE_URL must contain host")
+	}
+
+	if u.RawQuery != "" || u.Fragment != "" {
+		panic("APP_BASE_URL must not contain query or fragment")
+	}
 }
 
 func (p PostgresConfig) DSN() string {

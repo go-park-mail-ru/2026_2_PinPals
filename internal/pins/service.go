@@ -3,6 +3,7 @@ package pins
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"strings"
 
 	"2026_2_PinPals/internal/model"
@@ -10,11 +11,51 @@ import (
 
 var ErrValidation = errors.New("validation error")
 
-type Service struct {
-	repository *Repository
+func isValidImageName(name string) bool {
+	if name == "" {
+		return false
+	}
+
+	if filepath.Base(name) != name {
+		return false
+	}
+
+	if strings.ContainsAny(name, `/\`) {
+		return false
+	}
+
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".jpg", ".jpeg", ".png", ".gif", ".webp":
+		return true
+	default:
+		return false
+	}
 }
 
-func NewService(repository *Repository) *Service {
+type PinRepository interface {
+	Create(
+		ctx context.Context,
+		creatorID int,
+		input model.CreatePinInput,
+	) (model.Pin, error)
+
+	List(
+		ctx context.Context,
+		limit int,
+		cursor *Cursor,
+	) ([]model.Pin, bool, error)
+
+	GetByID(
+		ctx context.Context,
+		id int,
+	) (model.Pin, error)
+}
+
+type Service struct {
+	repository PinRepository
+}
+
+func NewService(repository PinRepository) *Service {
 	return &Service{repository: repository}
 }
 
@@ -22,7 +63,11 @@ func (s *Service) Create(ctx context.Context, creatorID int, input model.CreateP
 	input.ImageURL = strings.TrimSpace(input.ImageURL)
 	input.Name = strings.TrimSpace(input.Name)
 
-	if input.ImageURL == "" || input.Name == "" {
+	if !isValidImageName(input.ImageURL) {
+		return model.Pin{}, ErrValidation
+	}
+
+	if input.Name == "" {
 		return model.Pin{}, ErrValidation
 	}
 	if len(input.Name) > 255 {
