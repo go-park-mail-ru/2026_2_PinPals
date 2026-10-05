@@ -73,7 +73,7 @@ func (r *Repository) CreateUser(ctx context.Context, user model.RegisterInput, p
 
 		_, err = tx.Exec(
 			ctx,
-			`INSERT INTO password (user_id, password_hash)
+			`INSERT INTO "password" (user_id, password_hash)
              VALUES ($1, $2)`,
 			result.ID,
 			passwordHash,
@@ -98,7 +98,7 @@ func (r *Repository) GetUserWithPasswordHash(ctx context.Context, userTag string
 		SELECT u.user_id, u.name, u.user_tag, u.birth_date, u.description, u.avatar_url,
 		       u.deleted, u.created_at, u.updated_at, u.deleted_at, a.password_hash
 		FROM "user" u
-		JOIN password a ON a.user_id = u.user_id
+		JOIN "password" a ON a.user_id = u.user_id
 		WHERE u.user_tag = $1 AND u.deleted = false
 	`
 
