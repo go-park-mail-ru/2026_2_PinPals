@@ -6,6 +6,7 @@ import (
 
 	"2026_2_PinPals/internal/auth"
 	"2026_2_PinPals/internal/config"
+	"2026_2_PinPals/internal/images"
 	"2026_2_PinPals/internal/middleware"
 	"2026_2_PinPals/internal/pins"
 )
@@ -15,6 +16,7 @@ func NewRouter(
 	logger *slog.Logger,
 	authHandler *auth.Handler,
 	pinHandler *pins.Handler,
+	imageHandler *images.Handler,
 	tokenManager *middleware.TokenManager,
 ) http.Handler {
 	mux := http.NewServeMux()
@@ -30,10 +32,13 @@ func NewRouter(
 
 	mux.HandleFunc("POST /api/v1/pins/search", pinHandler.List)
 	mux.HandleFunc("GET /api/v1/pins/{pinID}", pinHandler.GetByID)
+
 	mux.Handle(
 		"POST /api/v1/pins",
 		tokenManager.Middleware(http.HandlerFunc(pinHandler.Create)),
 	)
+
+	mux.HandleFunc("GET /images/{filename}", imageHandler.Get)
 
 	var handler http.Handler = mux
 	handler = requestLogger(logger)(handler)
