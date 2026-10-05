@@ -15,6 +15,24 @@ import (
 var ErrInvalidCredentials = errors.New("invalid credentials")
 var ErrValidation = errors.New("validation error")
 
+const (
+	ValidationRequired          = "required"
+	ValidationTooShort          = "too_short"
+	ValidationTooLong           = "too_long"
+	ValidationUnderage          = "underage"
+	ValidationTooOld            = "too_old"
+	ValidationFutureDate        = "future_date"
+	ValidationMustContainLetter = "must_contain_letter"
+)
+
+type ValidationErrors struct {
+	Fields map[string]string
+}
+
+func (e *ValidationErrors) Error() string {
+	return "validation error"
+}
+
 type UserRepository interface {
 	CreateUser(
 		ctx context.Context,
@@ -80,20 +98,50 @@ func (s *Service) Login(ctx context.Context, input model.LoginInput, issueToken 
 }
 
 func validateRegisterInput(input model.RegisterInput, now time.Time) error {
-	if input.Name == "" || input.UserTag == "" {
-		return ErrValidation
+	fields := make(map[string]string)
+
+	if input.Name == "" {
+		fields["name"] = ValidationRequired
+	} else if len(input.Name) > 255 {
+		fields["name"] = ValidationTooLong
 	}
 
-	if calculateAge(input.BirthDate, now) < 13 {
-		return ErrValidation
+	if input.UserTag == "" {
+		fields["user_tag"] = ValidationRequired
+	} else if len(input.UserTag) > 64 {
+		fields["user_tag"] = ValidationTooLong
 	}
 
-	if len(input.Password) < 8 || !hasLetter(input.Password) {
-		return ErrValidation
+	if input.BirthDate.IsZero() {
+		fields["birth_date"] = ValidationRequired
+	} else {
+		birthDate := input.BirthDate.UTC()
+		currentTime := now.UTC()
+
+		if birthDate.After(currentTime) {
+			fields["birth_date"] = ValidationFutureDate
+		} else {
+			age := calculateAge(birthDate, currentTime)
+
+			if age < 13 {
+				fields["birth_date"] = ValidationUnderage
+			}
+		}
 	}
 
-	if len(input.UserTag) > 64 || len(input.Name) > 255 {
-		return ErrValidation
+	if input.Password == "" {
+		fields["password"] = ValidationRequired
+	} else {
+		switch {
+		case len(input.Password) < 8:
+			fields["password"] = ValidationTooShort
+		case !hasLetter(input.Password):
+			fields["password"] = ValidationMustContainLetter
+		}
+	}
+
+	if len(fields) > 0 {
+		return &ValidationErrors{Fields: fields}
 	}
 
 	return nil

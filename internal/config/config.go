@@ -162,8 +162,8 @@ func getEnvDuration(key string, fallback time.Duration) time.Duration {
 	return duration
 }
 
-func ParseLogLevel(value string) slog.Level {
-	switch strings.ToLower(value) {
+func (c AppConfig) SlogLevel() slog.Level {
+	switch strings.ToLower(c.LogLevel) {
 	case "debug":
 		return slog.LevelDebug
 	case "warn", "warning":

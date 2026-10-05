@@ -26,7 +26,7 @@ func main() {
 		slog.NewJSONHandler(
 			os.Stdout,
 			&slog.HandlerOptions{
-				Level: config.ParseLogLevel(cfg.App.LogLevel),
+				Level: cfg.App.SlogLevel(),
 			},
 		),
 	)

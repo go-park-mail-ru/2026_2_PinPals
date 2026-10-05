@@ -36,17 +36,35 @@ func NewHandler(service AuthService, tokenIssuer TokenIssuer, logger *slog.Logge
 
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	var input model.RegisterInput
+
 	if err := httpx.DecodeJSON(w, r, &input); err != nil {
 		return
 	}
 
 	user, err := h.service.Register(r.Context(), input)
 	if err != nil {
+		var validationErr *ValidationErrors
+
 		switch {
-		case errors.Is(err, ErrValidation):
-			httpx.WriteError(w, http.StatusBadRequest, "invalid registration data")
+		case errors.As(err, &validationErr):
+			httpx.WriteValidationError(
+				w,
+				http.StatusBadRequest,
+				validationErr.Fields,
+			)
+
 		case errors.Is(err, ErrUserTagExists):
-			httpx.WriteError(w, http.StatusConflict, "user tag already exists")
+			httpx.WriteJSON(
+				w,
+				http.StatusConflict,
+				map[string]any{
+					"error": "conflict",
+					"fields": map[string]string{
+						"user_tag": "already_exists",
+					},
+				},
+			)
+
 		default:
 			h.logger.ErrorContext(
 				r.Context(),
@@ -60,6 +78,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 				"failed to register user",
 			)
 		}
+
 		return
 	}
 
