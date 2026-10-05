@@ -29,71 +29,26 @@ func (r *Repository) Create(ctx context.Context, creatorID int, input model.Crea
 
 	var pin model.Pin
 	err := r.pool.QueryRow(ctx, query, creatorID, input.ImageURL, input.Name, input.Description).Scan(
-		&pin.ID,
-		&pin.CreatorID,
-		&pin.ImageURL,
-		&pin.Name,
-		&pin.Description,
-		&pin.Deleted,
-		&pin.CreatedAt,
-		&pin.UpdatedAt,
-		&pin.DeletedAt,
+		&pin.ID, &pin.CreatorID, &pin.ImageURL, &pin.Name, &pin.Description, &pin.Deleted, &pin.CreatedAt, &pin.UpdatedAt, &pin.DeletedAt,
 	)
 
 	return pin, err
 }
 
 func (r *Repository) List(ctx context.Context, limit int, cursor *Cursor) ([]model.Pin, bool, error) {
-	const baseQuery = `
-		SELECT pin_id, creator_id, image_url, name, description, deleted, created_at, updated_at, deleted_at
-		FROM pin
-		WHERE deleted = false
-	`
+	query, args := r.buildListQuery(cursor, limit)
 
-	const orderAndLimit = `
-		ORDER BY created_at DESC, pin_id DESC
-		LIMIT $1
-	`
-
-	var (
-		rows    pgx.Rows
-		err     error
-		query   string
-		results []model.Pin
-	)
-
-	if cursor == nil {
-		query = baseQuery + orderAndLimit
-		rows, err = r.pool.Query(ctx, query, limit+1)
-	} else {
-		query = baseQuery + `
-			AND (created_at, pin_id) < ($1, $2)
-		` + `
-			ORDER BY created_at DESC, pin_id DESC
-			LIMIT $3
-		`
-		rows, err = r.pool.Query(ctx, query, cursor.CreatedAt, cursor.ID, limit+1)
-	}
-
+	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, false, err
 	}
 	defer rows.Close()
 
-	results = make([]model.Pin, 0, limit+1)
-
+	results := make([]model.Pin, 0, limit+1)
 	for rows.Next() {
 		var pin model.Pin
 		if err := rows.Scan(
-			&pin.ID,
-			&pin.CreatorID,
-			&pin.ImageURL,
-			&pin.Name,
-			&pin.Description,
-			&pin.Deleted,
-			&pin.CreatedAt,
-			&pin.UpdatedAt,
-			&pin.DeletedAt,
+			&pin.ID, &pin.CreatorID, &pin.ImageURL, &pin.Name, &pin.Description, &pin.Deleted, &pin.CreatedAt, &pin.UpdatedAt, &pin.DeletedAt,
 		); err != nil {
 			return nil, false, err
 		}
@@ -105,7 +60,34 @@ func (r *Repository) List(ctx context.Context, limit int, cursor *Cursor) ([]mod
 	}
 
 	hasNext := len(results) > limit
+	if hasNext {
+		results = results[:limit]
+	}
+
 	return results, hasNext, nil
+}
+
+func (r *Repository) buildListQuery(cursor *Cursor, limit int) (string, []any) {
+	const baseQuery = `
+		SELECT pin_id, creator_id, image_url, name, description, deleted, created_at, updated_at, deleted_at
+		FROM pin
+		WHERE deleted = false
+	`
+
+	if cursor == nil {
+		query := baseQuery + `
+			ORDER BY created_at DESC, pin_id DESC
+			LIMIT $1
+		`
+		return query, []any{limit + 1}
+	}
+
+	query := baseQuery + `
+		AND (created_at, pin_id) < ($1, $2)
+		ORDER BY created_at DESC, pin_id DESC
+		LIMIT $3
+	`
+	return query, []any{cursor.CreatedAt, cursor.ID, limit + 1}
 }
 
 func (r *Repository) GetByID(ctx context.Context, id int) (model.Pin, error) {
@@ -117,15 +99,7 @@ func (r *Repository) GetByID(ctx context.Context, id int) (model.Pin, error) {
 
 	var pin model.Pin
 	err := r.pool.QueryRow(ctx, query, id).Scan(
-		&pin.ID,
-		&pin.CreatorID,
-		&pin.ImageURL,
-		&pin.Name,
-		&pin.Description,
-		&pin.Deleted,
-		&pin.CreatedAt,
-		&pin.UpdatedAt,
-		&pin.DeletedAt,
+		&pin.ID, &pin.CreatorID, &pin.ImageURL, &pin.Name, &pin.Description, &pin.Deleted, &pin.CreatedAt, &pin.UpdatedAt, &pin.DeletedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return model.Pin{}, ErrPinNotFound
