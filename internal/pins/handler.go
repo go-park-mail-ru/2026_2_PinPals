@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 
 	"2026_2_PinPals/internal/httpx"
 	"2026_2_PinPals/internal/middleware"
@@ -43,7 +42,7 @@ func NewHandler(service PinService, logger *slog.Logger, baseURL string) *Handle
 	return &Handler{
 		service: service,
 		logger:  logger,
-		baseURL: strings.TrimRight(baseURL, "/"),
+		baseURL: baseURL,
 	}
 }
 

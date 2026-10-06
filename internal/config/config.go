@@ -48,7 +48,7 @@ func MustLoad() *Config {
 	cfg := &Config{
 		App: AppConfig{
 			Port:     getEnv("APP_PORT", "8000"),
-			BaseURL:  getEnv("APP_BASE_URL", "http://localhost:8000"),
+			BaseURL:  normalizeBaseURL(getEnv("APP_BASE_URL", "http://localhost:8000")),
 			Env:      getEnv("APP_ENV", "development"),
 			LogLevel: getEnv("LOG_LEVEL", "info"),
 			ImageDir: getEnv("IMAGE_DIR", "./images"),
@@ -77,8 +77,6 @@ func MustLoad() *Config {
 		panic("POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB are required")
 	}
 
-	validateBaseURL(cfg.App.BaseURL)
-
 	if cfg.Auth.JWTSecret == "" {
 		panic("AUTH_JWT_SECRET is required")
 	}
@@ -88,6 +86,11 @@ func MustLoad() *Config {
 	}
 
 	return cfg
+}
+
+func normalizeBaseURL(value string) string {
+	validateBaseURL(value)
+	return strings.TrimRight(value, "/")
 }
 
 func validateBaseURL(value string) {
