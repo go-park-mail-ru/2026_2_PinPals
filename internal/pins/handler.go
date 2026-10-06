@@ -39,15 +39,12 @@ type Handler struct {
 	baseURL string
 }
 
-func NewHandler(service *Service, logger *slog.Logger, baseURL ...string) *Handler {
-	handler := &Handler{
+func NewHandler(service PinService, logger *slog.Logger, baseURL string) *Handler {
+	return &Handler{
 		service: service,
 		logger:  logger,
+		baseURL: strings.TrimRight(baseURL, "/"),
 	}
-	if len(baseURL) > 0 {
-		handler.baseURL = strings.TrimRight(baseURL[0], "/")
-	}
-	return handler
 }
 
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
@@ -98,7 +95,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	pins := make([]model.Pin, len(page.Pins))
 
 	for i, pin := range page.Pins {
-		pins[i] = h.withImageURL(r, pin)
+		pins[i] = h.withImageURL(pin)
 	}
 
 	response := struct {
@@ -145,7 +142,7 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pin = h.withImageURL(r, pin)
+	pin = h.withImageURL(pin)
 
 	httpx.WriteJSON(w, http.StatusOK, pin)
 }
@@ -184,30 +181,16 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pin = h.withImageURL(r, pin)
+	pin = h.withImageURL(pin)
 
 	httpx.WriteJSON(w, http.StatusCreated, pin)
 }
 
-func (h *Handler) withImageURL(r *http.Request, pin model.Pin) model.Pin {
-	if h.baseURL != "" {
-		pin.ImageURL = h.baseURL + "/images/" + url.PathEscape(pin.ImageURL)
+func (h *Handler) withImageURL(pin model.Pin) model.Pin {
+	if h.baseURL == "" {
 		return pin
 	}
 
-	scheme := "http"
-
-	if r.TLS != nil {
-		scheme = "https"
-	}
-
-	if forwardedProto := r.Header.Get("X-Forwarded-Proto"); forwardedProto == "http" || forwardedProto == "https" {
-		scheme = forwardedProto
-	}
-
-	host := r.Host
-
-	pin.ImageURL = scheme + "://" + host + "/images/" + url.PathEscape(pin.ImageURL)
-
+	pin.ImageURL = h.baseURL + "/images/" + url.PathEscape(pin.ImageURL)
 	return pin
 }

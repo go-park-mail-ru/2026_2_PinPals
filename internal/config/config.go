@@ -45,12 +45,10 @@ type CORSConfig struct {
 // MustLoad читает переменные окружения и возвращает Config.
 // Если обязательной настройки нет или она некорректна — вызывает panic.
 func MustLoad() *Config {
-	appPort := getEnv("APP_PORT", "8000")
-
 	cfg := &Config{
 		App: AppConfig{
-			Port:     appPort,
-			BaseURL:  getEnv("APP_BASE_URL", "http://127.0.0.1:"+appPort),
+			Port:     getEnv("APP_PORT", "8000"),
+			BaseURL:  getEnv("APP_BASE_URL", "http://localhost:8000"),
 			Env:      getEnv("APP_ENV", "development"),
 			LogLevel: getEnv("LOG_LEVEL", "info"),
 			ImageDir: getEnv("IMAGE_DIR", "./images"),

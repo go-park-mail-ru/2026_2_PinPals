@@ -20,6 +20,8 @@ WORKDIR /app
 
 COPY --from=builder --chmod=755 /out/app /app/app
 
+COPY templates /app/images
+
 EXPOSE 8080
 
 USER nobody
