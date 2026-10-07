@@ -67,6 +67,7 @@ func TestNewRouter(t *testing.T) {
 	pinHandler := pins.NewHandler(
 		pins.NewService(fakeServerPinRepository{}),
 		logger,
+		"",
 	)
 	tokenManager := middleware.NewTokenManager(
 		[]byte("12345678901234567890123456789012"),

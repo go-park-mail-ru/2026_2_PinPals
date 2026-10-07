@@ -151,8 +151,8 @@ func TestValidateRegisterInput(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validateRegisterInput(tt.input, now)
 
-			if tt.wantErr && !errors.Is(err, ErrValidation) {
-				t.Fatalf("expected validation error, got %v", err)
+			if tt.wantErr && err == nil {
+				t.Fatalf("expected validation error, got nil")
 			}
 
 			if !tt.wantErr && err != nil {

@@ -61,7 +61,7 @@ func TestRegisterHandler(t *testing.T) {
 		{
 			name:       "validation",
 			body:       `{"name":"Alex"}`,
-			err:        ErrValidation,
+			err:        &ValidationErrors{Fields: map[string]string{"user_tag": "required"}},
 			wantStatus: http.StatusBadRequest,
 		},
 		{
@@ -118,9 +118,9 @@ func TestLoginHandler(t *testing.T) {
 		},
 		{
 			name:       "validation",
-			body:       `{"user_tag":"","password":""}`,
-			err:        ErrValidation,
-			wantStatus: http.StatusUnauthorized,
+			body:       `{"name":"Alex"}`,
+			err:        &ValidationErrors{Fields: map[string]string{"user_tag": "required"}},
+			wantStatus: http.StatusBadRequest,
 		},
 		{
 			name:       "invalid credentials",

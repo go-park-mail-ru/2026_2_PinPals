@@ -73,7 +73,7 @@ func TestListHandler(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			service := NewService(tt.repo)
-			handler := NewHandler(service, pinsTestLogger())
+			handler := NewHandler(service, pinsTestLogger(), "")
 
 			req := httptest.NewRequest(
 				http.MethodPost,
@@ -103,7 +103,7 @@ func TestListHandlerNextCursor(t *testing.T) {
 		},
 		listHasNext: true,
 	}
-	handler := NewHandler(NewService(repo), pinsTestLogger())
+	handler := NewHandler(NewService(repo), pinsTestLogger(), "")
 
 	req := httptest.NewRequest(
 		http.MethodPost,
@@ -159,7 +159,7 @@ func TestGetByIDHandler(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := NewHandler(NewService(tt.repo), pinsTestLogger())
+			handler := NewHandler(NewService(tt.repo), pinsTestLogger(), "")
 			req := httptest.NewRequest(http.MethodGet, "/api/v1/pins/"+tt.pathValue, nil)
 			req.SetPathValue("pinID", tt.pathValue)
 			rec := httptest.NewRecorder()
@@ -190,7 +190,7 @@ func TestCreateHandler(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := NewHandler(NewService(tt.repo), pinsTestLogger())
+			handler := NewHandler(NewService(tt.repo), pinsTestLogger(), "")
 
 			req := httptest.NewRequest(
 				http.MethodPost,
@@ -238,7 +238,7 @@ func TestListHandlerWithCursor(t *testing.T) {
 	repo := &fakePinRepository{
 		listResult: []model.Pin{{ID: 9, CreatedAt: cursor.CreatedAt.Add(-time.Minute)}},
 	}
-	handler := NewHandler(NewService(repo), pinsTestLogger())
+	handler := NewHandler(NewService(repo), pinsTestLogger(), "")
 
 	req := httptest.NewRequest(
 		http.MethodPost,
