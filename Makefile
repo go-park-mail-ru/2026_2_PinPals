@@ -22,3 +22,7 @@ fmt:
 
 down:
 	docker compose down
+
+cover:
+ @go test -coverprofile=coverage.out -coverpkg=./... ./... > /dev/null
+ @go tool cover -func=coverage.out
