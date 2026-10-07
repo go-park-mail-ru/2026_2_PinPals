@@ -14,3 +14,10 @@ func WriteJSON(w http.ResponseWriter, status int, payload any) {
 func WriteError(w http.ResponseWriter, status int, message string) {
 	WriteJSON(w, status, map[string]string{"error": message})
 }
+
+func WriteValidationError(w http.ResponseWriter, status int, fields map[string]string) {
+	WriteJSON(w, status, map[string]any{
+		"error":  "validation_error",
+		"fields": fields,
+	})
+}

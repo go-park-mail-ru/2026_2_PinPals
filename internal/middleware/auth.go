@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"2026_2_PinPals/internal/httpx"
 	"context"
 	"errors"
 	"net/http"
@@ -86,7 +87,9 @@ func UserIDFromContext(ctx context.Context) (int, bool) {
 }
 
 func writeUnauthorized(w http.ResponseWriter) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusUnauthorized)
-	_, _ = w.Write([]byte(`{"error":"unauthorized"}`))
+	httpx.WriteError(
+		w,
+		http.StatusUnauthorized,
+		"unauthorized",
+	)
 }
