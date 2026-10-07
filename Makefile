@@ -1,4 +1,4 @@
-.PHONY: help build run tests fmt up down
+.PHONY: help build run tests fmt up down cover
 
 help:
 	@echo "Available commands:"
@@ -24,5 +24,5 @@ down:
 	docker compose down
 
 cover:
- @go test -coverprofile=coverage.out -coverpkg=./... ./... > /dev/null
- @go tool cover -func=coverage.out
+	@go test -coverprofile=coverage.out -coverpkg=./... ./... > /dev/null
+	@go tool cover -func=coverage.out
