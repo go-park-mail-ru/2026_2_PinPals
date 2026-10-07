@@ -32,7 +32,6 @@ func NewRouter(
 
 	mux.HandleFunc("POST /api/v1/pins/search", pinHandler.List)
 	mux.HandleFunc("GET /api/v1/pins/{pinID}", pinHandler.GetByID)
-
 	mux.Handle(
 		"POST /api/v1/pins",
 		tokenManager.Middleware(http.HandlerFunc(pinHandler.Create)),
