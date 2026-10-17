@@ -6,10 +6,9 @@ CREATE TABLE IF NOT EXISTS "user" (
     birth_date      date        NOT NULL,
     description     text,
     avatar_url      text        UNIQUE,
-    deleted         boolean     NOT NULL DEFAULT false,
     created_at      timestamptz NOT NULL DEFAULT now(),
     updated_at      timestamptz NOT NULL DEFAULT now(),
-    deleted_at      timestamptz
+    deleted_at      timestamptz DEFAULT NULL
 );
 
 COMMENT ON TABLE  "user"             IS 'Учётные записи пользователей';
@@ -29,12 +28,6 @@ FOR EACH ROW
 WHEN (OLD.* IS DISTINCT FROM NEW.*)
 EXECUTE FUNCTION fn_set_updated_at();
 
-CREATE OR REPLACE TRIGGER trg_user_soft_delete
-BEFORE UPDATE ON "user"
-FOR EACH ROW
-WHEN (NEW.deleted = true AND OLD.deleted = false)
-EXECUTE FUNCTION fn_set_deleted_at();
-
 ---- create above / drop below ----
 
 -- Write your migrate down statements here. If this migration is irreversible
@@ -42,6 +35,5 @@ EXECUTE FUNCTION fn_set_deleted_at();
 
 DROP TRIGGER IF EXISTS trg_user_check_age ON "user";
 DROP TRIGGER IF EXISTS trg_user_updated_at ON "user";
-DROP TRIGGER IF EXISTS trg_user_soft_delete ON "user";
 
 DROP TABLE IF EXISTS "user";
