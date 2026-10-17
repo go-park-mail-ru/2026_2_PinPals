@@ -1,10 +1,6 @@
-package pins
+package domain
 
-import (
-	"time"
-
-	"2026_2_PinPals/internal/model"
-)
+import "time"
 
 type Cursor struct {
 	CreatedAt time.Time `json:"created_at"`
@@ -12,6 +8,6 @@ type Cursor struct {
 }
 
 type Page struct {
-	Pins       []model.Pin
+	Pins       []Pin
 	NextCursor *Cursor
 }

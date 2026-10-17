@@ -1,18 +1,15 @@
-package auth
+package repository
 
 import (
 	"context"
 	"errors"
 
-	"2026_2_PinPals/internal/model"
+	"2026_2_PinPals/auth_service/domain"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
-
-var ErrUserNotFound = errors.New("user not found")
-var ErrUserTagExists = errors.New("user tag already exists")
 
 type Repository struct {
 	pool *pgxpool.Pool
@@ -22,8 +19,8 @@ func NewRepository(pool *pgxpool.Pool) *Repository {
 	return &Repository{pool: pool}
 }
 
-func (r *Repository) CreateUser(ctx context.Context, user model.RegisterInput, passwordHash string) (model.User, error) {
-	var result model.User
+func (r *Repository) CreateUser(ctx context.Context, user domain.RegisterInput, passwordHash string) (domain.User, error) {
+	var result domain.User
 
 	err := pgx.BeginFunc(ctx, r.pool, func(tx pgx.Tx) error {
 		const query = `
@@ -84,16 +81,16 @@ func (r *Repository) CreateUser(ctx context.Context, user model.RegisterInput, p
 
 	if err != nil {
 		if isUniqueViolation(err) {
-			return model.User{}, ErrUserTagExists
+			return domain.User{}, domain.ErrUserTagExists
 		}
 
-		return model.User{}, err
+		return domain.User{}, err
 	}
 
 	return result, nil
 }
 
-func (r *Repository) GetUserWithPasswordHash(ctx context.Context, userTag string) (model.User, string, error) {
+func (r *Repository) GetUserWithPasswordHash(ctx context.Context, userTag string) (domain.User, string, error) {
 	const query = `
 		SELECT u.user_id, u.name, u.user_tag, u.birth_date, u.description, u.avatar_url,
 		    u.created_at, u.updated_at, u.deleted_at, a.password_hash
@@ -102,7 +99,7 @@ func (r *Repository) GetUserWithPasswordHash(ctx context.Context, userTag string
 		WHERE u.user_tag = $1 AND u.deleted_at IS NULL
 	`
 
-	var user model.User
+	var user domain.User
 	var passwordHash string
 	err := r.pool.QueryRow(ctx, query, userTag).Scan(
 		&user.ID,
@@ -117,10 +114,10 @@ func (r *Repository) GetUserWithPasswordHash(ctx context.Context, userTag string
 		&passwordHash,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return model.User{}, "", ErrUserNotFound
+		return domain.User{}, "", domain.ErrUserNotFound
 	}
 	if err != nil {
-		return model.User{}, "", err
+		return domain.User{}, "", err
 	}
 	return user, passwordHash, nil
 }

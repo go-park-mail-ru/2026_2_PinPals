@@ -1,4 +1,4 @@
-package auth
+package usecase
 
 import (
 	"context"
@@ -6,13 +6,13 @@ import (
 	"testing"
 	"time"
 
-	"2026_2_PinPals/internal/model"
+	"2026_2_PinPals/auth_service/domain"
 
 	"golang.org/x/crypto/bcrypt"
 )
 
 type fakeAuthRepository struct {
-	user         model.User
+	user         domain.User
 	passwordHash string
 	createErr    error
 	getErr       error
@@ -20,14 +20,14 @@ type fakeAuthRepository struct {
 
 func (f *fakeAuthRepository) CreateUser(
 	_ context.Context,
-	user model.RegisterInput,
+	user domain.RegisterInput,
 	passwordHash string,
-) (model.User, error) {
+) (domain.User, error) {
 	if f.createErr != nil {
-		return model.User{}, f.createErr
+		return domain.User{}, f.createErr
 	}
 
-	f.user = model.User{
+	f.user = domain.User{
 		ID:        1,
 		Name:      user.Name,
 		UserTag:   user.UserTag,
@@ -42,9 +42,9 @@ func (f *fakeAuthRepository) CreateUser(
 func (f *fakeAuthRepository) GetUserWithPasswordHash(
 	_ context.Context,
 	_ string,
-) (model.User, string, error) {
+) (domain.User, string, error) {
 	if f.getErr != nil {
-		return model.User{}, "", f.getErr
+		return domain.User{}, "", f.getErr
 	}
 
 	return f.user, f.passwordHash, nil
@@ -64,12 +64,12 @@ func TestValidateRegisterInput(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		input   model.RegisterInput
+		input   domain.RegisterInput
 		wantErr bool
 	}{
 		{
 			name: "valid",
-			input: model.RegisterInput{
+			input: domain.RegisterInput{
 				Name:      "Alex",
 				UserTag:   "alex",
 				BirthDate: time.Date(2004, 7, 21, 0, 0, 0, 0, time.UTC),
@@ -78,7 +78,7 @@ func TestValidateRegisterInput(t *testing.T) {
 		},
 		{
 			name: "empty name",
-			input: model.RegisterInput{
+			input: domain.RegisterInput{
 				Name:      "",
 				UserTag:   "alex",
 				BirthDate: time.Date(2004, 7, 21, 0, 0, 0, 0, time.UTC),
@@ -88,7 +88,7 @@ func TestValidateRegisterInput(t *testing.T) {
 		},
 		{
 			name: "empty user tag",
-			input: model.RegisterInput{
+			input: domain.RegisterInput{
 				Name:      "Alex",
 				UserTag:   "",
 				BirthDate: time.Date(2004, 7, 21, 0, 0, 0, 0, time.UTC),
@@ -98,7 +98,7 @@ func TestValidateRegisterInput(t *testing.T) {
 		},
 		{
 			name: "under 13",
-			input: model.RegisterInput{
+			input: domain.RegisterInput{
 				Name:      "Alex",
 				UserTag:   "alex",
 				BirthDate: time.Date(2014, 10, 5, 0, 0, 0, 0, time.UTC),
@@ -108,7 +108,7 @@ func TestValidateRegisterInput(t *testing.T) {
 		},
 		{
 			name: "exactly 13",
-			input: model.RegisterInput{
+			input: domain.RegisterInput{
 				Name:      "Alex",
 				UserTag:   "alex",
 				BirthDate: time.Date(2013, 10, 4, 0, 0, 0, 0, time.UTC),
@@ -117,7 +117,7 @@ func TestValidateRegisterInput(t *testing.T) {
 		},
 		{
 			name: "birthday tomorrow",
-			input: model.RegisterInput{
+			input: domain.RegisterInput{
 				Name:      "Alex",
 				UserTag:   "alex",
 				BirthDate: time.Date(2013, 10, 5, 0, 0, 0, 0, time.UTC),
@@ -127,7 +127,7 @@ func TestValidateRegisterInput(t *testing.T) {
 		},
 		{
 			name: "future birth date",
-			input: model.RegisterInput{
+			input: domain.RegisterInput{
 				Name:      "Alex",
 				UserTag:   "alex",
 				BirthDate: time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC),
@@ -137,7 +137,7 @@ func TestValidateRegisterInput(t *testing.T) {
 		},
 		{
 			name: "short password",
-			input: model.RegisterInput{
+			input: domain.RegisterInput{
 				Name:      "Alex",
 				UserTag:   "alex",
 				BirthDate: time.Date(2004, 7, 21, 0, 0, 0, 0, time.UTC),
@@ -166,7 +166,7 @@ func TestRegister(t *testing.T) {
 	repo := &fakeAuthRepository{}
 	service := NewService(repo)
 
-	input := model.RegisterInput{
+	input := domain.RegisterInput{
 		Name:      "  Alex  ",
 		UserTag:   "  alex  ",
 		BirthDate: time.Date(2004, 7, 21, 0, 0, 0, 0, time.UTC),
@@ -213,7 +213,7 @@ func TestRegisterRepositoryError(t *testing.T) {
 
 	_, err := service.Register(
 		context.Background(),
-		model.RegisterInput{
+		domain.RegisterInput{
 			Name:      "Alex",
 			UserTag:   "alex",
 			BirthDate: time.Date(2004, 7, 21, 0, 0, 0, 0, time.UTC),
@@ -236,7 +236,7 @@ func TestLoginSuccess(t *testing.T) {
 	}
 
 	repo := &fakeAuthRepository{
-		user: model.User{
+		user: domain.User{
 			ID:        42,
 			Name:      "Alex",
 			UserTag:   "alex",
@@ -251,7 +251,7 @@ func TestLoginSuccess(t *testing.T) {
 
 	response, err := service.Login(
 		context.Background(),
-		model.LoginInput{
+		domain.LoginInput{
 			UserTag:  " alex ",
 			Password: "password123",
 		},
@@ -288,7 +288,7 @@ func TestLoginInvalidPassword(t *testing.T) {
 	}
 
 	repo := &fakeAuthRepository{
-		user: model.User{
+		user: domain.User{
 			ID: 42,
 		},
 		passwordHash: string(hash),
@@ -298,7 +298,7 @@ func TestLoginInvalidPassword(t *testing.T) {
 
 	_, err = service.Login(
 		context.Background(),
-		model.LoginInput{
+		domain.LoginInput{
 			UserTag:  "alex",
 			Password: "wrong-password",
 		},
@@ -308,21 +308,21 @@ func TestLoginInvalidPassword(t *testing.T) {
 		},
 	)
 
-	if !errors.Is(err, ErrInvalidCredentials) {
+	if !errors.Is(err, domain.ErrInvalidCredentials) {
 		t.Fatalf("expected invalid credentials, got %v", err)
 	}
 }
 
 func TestLoginUserNotFound(t *testing.T) {
 	repo := &fakeAuthRepository{
-		getErr: ErrUserNotFound,
+		getErr: domain.ErrUserNotFound,
 	}
 
 	service := NewService(repo)
 
 	_, err := service.Login(
 		context.Background(),
-		model.LoginInput{
+		domain.LoginInput{
 			UserTag:  "alex",
 			Password: "password123",
 		},
@@ -332,7 +332,7 @@ func TestLoginUserNotFound(t *testing.T) {
 		},
 	)
 
-	if !errors.Is(err, ErrInvalidCredentials) {
+	if !errors.Is(err, domain.ErrInvalidCredentials) {
 		t.Fatalf("expected invalid credentials, got %v", err)
 	}
 }
@@ -348,7 +348,7 @@ func TestLoginRepositoryError(t *testing.T) {
 
 	_, err := service.Login(
 		context.Background(),
-		model.LoginInput{
+		domain.LoginInput{
 			UserTag:  "alex",
 			Password: "password123",
 		},
@@ -373,7 +373,7 @@ func TestLoginTokenError(t *testing.T) {
 	}
 
 	repo := &fakeAuthRepository{
-		user:         model.User{ID: 42},
+		user:         domain.User{ID: 42},
 		passwordHash: string(hash),
 	}
 
@@ -383,7 +383,7 @@ func TestLoginTokenError(t *testing.T) {
 
 	_, err = service.Login(
 		context.Background(),
-		model.LoginInput{
+		domain.LoginInput{
 			UserTag:  "alex",
 			Password: "password123",
 		},
