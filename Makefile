@@ -18,7 +18,7 @@ tests:
 	go test ./...
 
 fmt:
-	gofmt -w ./cmd ./internal
+	gofmt -w ./cmd ./internal ./auth_service ./pin_service
 
 down:
 	docker compose down

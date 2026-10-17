@@ -1,4 +1,4 @@
-package auth
+package delivery
 
 import (
 	"bytes"
@@ -11,33 +11,33 @@ import (
 	"testing"
 	"time"
 
-	"2026_2_PinPals/internal/model"
+	"2026_2_PinPals/auth_service/domain"
 )
 
 type fakeAuthHandlerService struct {
-	registerResult model.User
+	registerResult domain.User
 	registerErr    error
-	loginResult    model.AuthResponse
+	loginResult    domain.AuthResponse
 	loginErr       error
 }
 
 func (f *fakeAuthHandlerService) Register(
 	_ context.Context,
-	_ model.RegisterInput,
-) (model.User, error) {
+	_ domain.RegisterInput,
+) (domain.User, error) {
 	if f.registerErr != nil {
-		return model.User{}, f.registerErr
+		return domain.User{}, f.registerErr
 	}
 	return f.registerResult, nil
 }
 
 func (f *fakeAuthHandlerService) Login(
 	_ context.Context,
-	_ model.LoginInput,
+	_ domain.LoginInput,
 	_ func(int) (string, error),
-) (model.AuthResponse, error) {
+) (domain.AuthResponse, error) {
 	if f.loginErr != nil {
-		return model.AuthResponse{}, f.loginErr
+		return domain.AuthResponse{}, f.loginErr
 	}
 	return f.loginResult, nil
 }
@@ -61,13 +61,13 @@ func TestRegisterHandler(t *testing.T) {
 		{
 			name:       "validation",
 			body:       `{"name":"Alex"}`,
-			err:        &ValidationErrors{Fields: map[string]string{"user_tag": "required"}},
+			err:        &domain.ValidationErrors{Fields: map[string]string{"user_tag": "required"}},
 			wantStatus: http.StatusBadRequest,
 		},
 		{
 			name:       "conflict",
 			body:       `{"name":"Alex"}`,
-			err:        ErrUserTagExists,
+			err:        domain.ErrUserTagExists,
 			wantStatus: http.StatusConflict,
 		},
 		{
@@ -86,7 +86,7 @@ func TestRegisterHandler(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			service := &fakeAuthHandlerService{
-				registerResult: model.User{ID: 1, Name: "Alex"},
+				registerResult: domain.User{ID: 1, Name: "Alex"},
 				registerErr:    tt.err,
 			}
 			handler := NewHandler(service, nil, testLogger())
@@ -119,13 +119,13 @@ func TestLoginHandler(t *testing.T) {
 		{
 			name:       "validation",
 			body:       `{"name":"Alex"}`,
-			err:        &ValidationErrors{Fields: map[string]string{"user_tag": "required"}},
+			err:        &domain.ValidationErrors{Fields: map[string]string{"user_tag": "required"}},
 			wantStatus: http.StatusBadRequest,
 		},
 		{
 			name:       "invalid credentials",
 			body:       `{"user_tag":"alex","password":"wrong"}`,
-			err:        ErrInvalidCredentials,
+			err:        domain.ErrInvalidCredentials,
 			wantStatus: http.StatusUnauthorized,
 		},
 		{
@@ -144,9 +144,9 @@ func TestLoginHandler(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			service := &fakeAuthHandlerService{
-				loginResult: model.AuthResponse{
+				loginResult: domain.AuthResponse{
 					Token: "jwt",
-					User:  model.User{ID: 1, UserTag: "alex"},
+					User:  domain.User{ID: 1, UserTag: "alex"},
 				},
 				loginErr: tt.err,
 			}
@@ -179,7 +179,7 @@ func TestNewHandler(t *testing.T) {
 
 func TestAuthJSONBirthDateCompatibility(t *testing.T) {
 	service := &fakeAuthHandlerService{
-		registerResult: model.User{BirthDate: time.Date(2004, 7, 21, 0, 0, 0, 0, time.UTC)},
+		registerResult: domain.User{BirthDate: time.Date(2004, 7, 21, 0, 0, 0, 0, time.UTC)},
 	}
 	h := NewHandler(service, nil, testLogger())
 

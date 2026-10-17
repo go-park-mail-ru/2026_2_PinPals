@@ -10,12 +10,16 @@ import (
 	"syscall"
 	"time"
 
-	"2026_2_PinPals/internal/auth"
+	authdelivery "2026_2_PinPals/auth_service/delivery"
+	authrepo "2026_2_PinPals/auth_service/repository"
+	authusecase "2026_2_PinPals/auth_service/usecase"
 	"2026_2_PinPals/internal/config"
 	"2026_2_PinPals/internal/images"
 	"2026_2_PinPals/internal/middleware"
-	"2026_2_PinPals/internal/pins"
 	"2026_2_PinPals/internal/server"
+	pindelivery "2026_2_PinPals/pin_service/delivery"
+	pinrepo "2026_2_PinPals/pin_service/repository"
+	pinusecase "2026_2_PinPals/pin_service/usecase"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -46,15 +50,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	authRepository := auth.NewRepository(pool)
-	authService := auth.NewService(authRepository)
+	authRepository := authrepo.NewRepository(pool)
+	authService := authusecase.NewService(authRepository)
 
 	tokenManager := middleware.NewTokenManager([]byte(cfg.Auth.JWTSecret), int64(cfg.Auth.TokenTTL/time.Second))
-	authHandler := auth.NewHandler(authService, tokenManager.Issue, logger)
+	authHandler := authdelivery.NewHandler(authService, tokenManager.Issue, logger)
 
-	pinRepository := pins.NewRepository(pool)
-	pinService := pins.NewService(pinRepository)
-	pinHandler := pins.NewHandler(pinService, logger, cfg.App.BaseURL)
+	pinRepository := pinrepo.NewRepository(pool)
+	pinService := pinusecase.NewService(pinRepository)
+	pinHandler := pindelivery.NewHandler(pinService, logger, cfg.App.BaseURL)
 
 	imageHandler := images.NewHandler(cfg.App.ImageDir)
 

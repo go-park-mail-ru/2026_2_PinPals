@@ -1,12 +1,13 @@
-package auth
+package delivery
 
 import (
-	"2026_2_PinPals/internal/httpx"
-	"2026_2_PinPals/internal/model"
 	"context"
 	"errors"
 	"log/slog"
 	"net/http"
+
+	"2026_2_PinPals/auth_service/domain"
+	"2026_2_PinPals/internal/httpx"
 )
 
 type TokenIssuer func(userID int) (string, error)
@@ -14,14 +15,14 @@ type TokenIssuer func(userID int) (string, error)
 type AuthService interface {
 	Register(
 		ctx context.Context,
-		input model.RegisterInput,
-	) (model.User, error)
+		input domain.RegisterInput,
+	) (domain.User, error)
 
 	Login(
 		ctx context.Context,
-		input model.LoginInput,
+		input domain.LoginInput,
 		issueToken func(userID int) (string, error),
-	) (model.AuthResponse, error)
+	) (domain.AuthResponse, error)
 }
 
 type Handler struct {
@@ -35,7 +36,7 @@ func NewHandler(service AuthService, tokenIssuer TokenIssuer, logger *slog.Logge
 }
 
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
-	var input model.RegisterInput
+	var input domain.RegisterInput
 
 	if err := httpx.DecodeJSON(w, r, &input); err != nil {
 		return
@@ -43,7 +44,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 
 	user, err := h.service.Register(r.Context(), input)
 	if err != nil {
-		var validationErr *ValidationErrors
+		var validationErr *domain.ValidationErrors
 
 		switch {
 		case errors.As(err, &validationErr):
@@ -53,7 +54,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 				validationErr.Fields,
 			)
 
-		case errors.Is(err, ErrUserTagExists):
+		case errors.Is(err, domain.ErrUserTagExists):
 			httpx.WriteJSON(
 				w,
 				http.StatusConflict,
@@ -86,7 +87,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
-	var input model.LoginInput
+	var input domain.LoginInput
 	if err := httpx.DecodeJSON(w, r, &input); err != nil {
 		return
 	}
@@ -94,7 +95,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	response, err := h.service.Login(r.Context(), input, h.tokenIssuer)
 	if err != nil {
 		switch {
-		case errors.Is(err, ErrValidation), errors.Is(err, ErrInvalidCredentials):
+		case errors.Is(err, domain.ErrValidation), errors.Is(err, domain.ErrInvalidCredentials):
 			httpx.WriteError(w, http.StatusUnauthorized, "invalid credentials")
 		default:
 			h.logger.ErrorContext(

@@ -1,16 +1,14 @@
-package pins
+package repository
 
 import (
 	"context"
 	"errors"
 
-	"2026_2_PinPals/internal/model"
+	"2026_2_PinPals/pin_service/domain"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
-
-var ErrPinNotFound = errors.New("pin not found")
 
 type Repository struct {
 	pool *pgxpool.Pool
@@ -20,14 +18,14 @@ func NewRepository(pool *pgxpool.Pool) *Repository {
 	return &Repository{pool: pool}
 }
 
-func (r *Repository) Create(ctx context.Context, creatorID int, input model.CreatePinInput) (model.Pin, error) {
+func (r *Repository) Create(ctx context.Context, creatorID int, input domain.CreatePinInput) (domain.Pin, error) {
 	const query = `
 		INSERT INTO pin (creator_id, image_url, name, description)
 		VALUES ($1, $2, $3, $4)
 		RETURNING pin_id, creator_id, image_url, name, description, created_at, updated_at, deleted_at
 	`
 
-	var pin model.Pin
+	var pin domain.Pin
 	err := r.pool.QueryRow(ctx, query, creatorID, input.ImageURL, input.Name, input.Description).Scan(
 		&pin.ID, &pin.CreatorID, &pin.ImageURL, &pin.Name, &pin.Description, &pin.CreatedAt, &pin.UpdatedAt, &pin.DeletedAt,
 	)
@@ -35,7 +33,7 @@ func (r *Repository) Create(ctx context.Context, creatorID int, input model.Crea
 	return pin, err
 }
 
-func (r *Repository) List(ctx context.Context, limit int, cursor *Cursor) ([]model.Pin, bool, error) {
+func (r *Repository) List(ctx context.Context, limit int, cursor *domain.Cursor) ([]domain.Pin, bool, error) {
 	query, args := r.buildListQuery(cursor, limit)
 
 	rows, err := r.pool.Query(ctx, query, args...)
@@ -44,9 +42,9 @@ func (r *Repository) List(ctx context.Context, limit int, cursor *Cursor) ([]mod
 	}
 	defer rows.Close()
 
-	results := make([]model.Pin, 0, limit+1)
+	results := make([]domain.Pin, 0, limit+1)
 	for rows.Next() {
-		var pin model.Pin
+		var pin domain.Pin
 		if err := rows.Scan(
 			&pin.ID, &pin.CreatorID, &pin.ImageURL, &pin.Name, &pin.Description, &pin.CreatedAt, &pin.UpdatedAt, &pin.DeletedAt,
 		); err != nil {
@@ -67,7 +65,7 @@ func (r *Repository) List(ctx context.Context, limit int, cursor *Cursor) ([]mod
 	return results, hasNext, nil
 }
 
-func (r *Repository) buildListQuery(cursor *Cursor, limit int) (string, []any) {
+func (r *Repository) buildListQuery(cursor *domain.Cursor, limit int) (string, []any) {
 	const baseQuery = `
 		SELECT pin_id, creator_id, image_url, name, description, created_at, updated_at, deleted_at
 		FROM pin
@@ -90,22 +88,22 @@ func (r *Repository) buildListQuery(cursor *Cursor, limit int) (string, []any) {
 	return query, []any{cursor.CreatedAt, cursor.ID, limit + 1}
 }
 
-func (r *Repository) GetByID(ctx context.Context, id int) (model.Pin, error) {
+func (r *Repository) GetByID(ctx context.Context, id int) (domain.Pin, error) {
 	const query = `
 		SELECT pin_id, creator_id, image_url, name, description, created_at, updated_at, deleted_at
 		FROM pin
 		WHERE pin_id = $1 AND deleted_at IS NULL
 	`
 
-	var pin model.Pin
+	var pin domain.Pin
 	err := r.pool.QueryRow(ctx, query, id).Scan(
 		&pin.ID, &pin.CreatorID, &pin.ImageURL, &pin.Name, &pin.Description, &pin.CreatedAt, &pin.UpdatedAt, &pin.DeletedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return model.Pin{}, ErrPinNotFound
+		return domain.Pin{}, domain.ErrPinNotFound
 	}
 	if err != nil {
-		return model.Pin{}, err
+		return domain.Pin{}, err
 	}
 	return pin, nil
 }

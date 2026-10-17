@@ -1,15 +1,12 @@
-package pins
+package usecase
 
 import (
 	"context"
-	"errors"
 	"path/filepath"
 	"strings"
 
-	"2026_2_PinPals/internal/model"
+	"2026_2_PinPals/pin_service/domain"
 )
-
-var ErrValidation = errors.New("validation error")
 
 func isValidImageName(name string) bool {
 	if name == "" {
@@ -36,19 +33,19 @@ type PinRepository interface {
 	Create(
 		ctx context.Context,
 		creatorID int,
-		input model.CreatePinInput,
-	) (model.Pin, error)
+		input domain.CreatePinInput,
+	) (domain.Pin, error)
 
 	List(
 		ctx context.Context,
 		limit int,
-		cursor *Cursor,
-	) ([]model.Pin, bool, error)
+		cursor *domain.Cursor,
+	) ([]domain.Pin, bool, error)
 
 	GetByID(
 		ctx context.Context,
 		id int,
-	) (model.Pin, error)
+	) (domain.Pin, error)
 }
 
 type Service struct {
@@ -59,34 +56,34 @@ func NewService(repository PinRepository) *Service {
 	return &Service{repository: repository}
 }
 
-func (s *Service) Create(ctx context.Context, creatorID int, input model.CreatePinInput) (model.Pin, error) {
+func (s *Service) Create(ctx context.Context, creatorID int, input domain.CreatePinInput) (domain.Pin, error) {
 	input.ImageURL = strings.TrimSpace(input.ImageURL)
 	input.Name = strings.TrimSpace(input.Name)
 
 	if !isValidImageName(input.ImageURL) {
-		return model.Pin{}, ErrValidation
+		return domain.Pin{}, domain.ErrValidation
 	}
 
 	if input.Name == "" {
-		return model.Pin{}, ErrValidation
+		return domain.Pin{}, domain.ErrValidation
 	}
 	if len(input.Name) > 255 {
-		return model.Pin{}, ErrValidation
+		return domain.Pin{}, domain.ErrValidation
 	}
 	return s.repository.Create(ctx, creatorID, input)
 }
 
-func (s *Service) List(ctx context.Context, limit int, cursor *Cursor) (Page, error) {
+func (s *Service) List(ctx context.Context, limit int, cursor *domain.Cursor) (domain.Page, error) {
 	if limit < 1 || limit > 100 {
-		return Page{}, ErrValidation
+		return domain.Page{}, domain.ErrValidation
 	}
 
 	result, hasNext, err := s.repository.List(ctx, limit, cursor)
 	if err != nil {
-		return Page{}, err
+		return domain.Page{}, err
 	}
 
-	page := Page{
+	page := domain.Page{
 		Pins: result,
 	}
 
@@ -96,7 +93,7 @@ func (s *Service) List(ctx context.Context, limit int, cursor *Cursor) (Page, er
 
 	page.Pins = result[:limit]
 	last := page.Pins[len(page.Pins)-1]
-	page.NextCursor = &Cursor{
+	page.NextCursor = &domain.Cursor{
 		CreatedAt: last.CreatedAt,
 		ID:        last.ID,
 	}
@@ -104,9 +101,9 @@ func (s *Service) List(ctx context.Context, limit int, cursor *Cursor) (Page, er
 	return page, nil
 }
 
-func (s *Service) GetByID(ctx context.Context, id int) (model.Pin, error) {
+func (s *Service) GetByID(ctx context.Context, id int) (domain.Pin, error) {
 	if id < 1 {
-		return model.Pin{}, ErrValidation
+		return domain.Pin{}, domain.ErrValidation
 	}
 	return s.repository.GetByID(ctx, id)
 }

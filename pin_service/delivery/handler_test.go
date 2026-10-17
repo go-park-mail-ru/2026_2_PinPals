@@ -1,7 +1,8 @@
-package pins
+package delivery
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -12,8 +13,62 @@ import (
 	"time"
 
 	"2026_2_PinPals/internal/middleware"
-	"2026_2_PinPals/internal/model"
+	"2026_2_PinPals/pin_service/domain"
+	"2026_2_PinPals/pin_service/usecase"
 )
+
+type fakePinRepository struct {
+	createResult domain.Pin
+	createErr    error
+
+	listResult  []domain.Pin
+	listHasNext bool
+	listErr     error
+
+	getResult domain.Pin
+	getErr    error
+}
+
+func (f *fakePinRepository) Create(
+	_ context.Context,
+	creatorID int,
+	input domain.CreatePinInput,
+) (domain.Pin, error) {
+	if f.createErr != nil {
+		return domain.Pin{}, f.createErr
+	}
+
+	return domain.Pin{
+		ID:          1,
+		CreatorID:   creatorID,
+		ImageURL:    input.ImageURL,
+		Name:        input.Name,
+		Description: input.Description,
+	}, nil
+}
+
+func (f *fakePinRepository) List(
+	_ context.Context,
+	_ int,
+	_ *domain.Cursor,
+) ([]domain.Pin, bool, error) {
+	if f.listErr != nil {
+		return nil, false, f.listErr
+	}
+
+	return f.listResult, f.listHasNext, nil
+}
+
+func (f *fakePinRepository) GetByID(
+	_ context.Context,
+	_ int,
+) (domain.Pin, error) {
+	if f.getErr != nil {
+		return domain.Pin{}, f.getErr
+	}
+
+	return f.getResult, nil
+}
 
 func pinsTestLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -34,7 +89,7 @@ func TestListHandler(t *testing.T) {
 			target: "/api/v1/pins/search",
 			body:   `{}`,
 			repo: &fakePinRepository{
-				listResult: []model.Pin{{ID: 1, CreatedAt: now}},
+				listResult: []domain.Pin{{ID: 1, CreatedAt: now}},
 			},
 			wantStatus: http.StatusOK,
 		},
@@ -72,7 +127,7 @@ func TestListHandler(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			service := NewService(tt.repo)
+			service := usecase.NewService(tt.repo)
 			handler := NewHandler(service, pinsTestLogger(), "")
 
 			req := httptest.NewRequest(
@@ -96,14 +151,14 @@ func TestListHandler(t *testing.T) {
 func TestListHandlerNextCursor(t *testing.T) {
 	now := time.Date(2026, 10, 4, 0, 0, 0, 0, time.UTC)
 	repo := &fakePinRepository{
-		listResult: []model.Pin{
+		listResult: []domain.Pin{
 			{ID: 1, CreatedAt: now},
 			{ID: 2, CreatedAt: now.Add(-time.Minute)},
 			{ID: 3, CreatedAt: now.Add(-2 * time.Minute)},
 		},
 		listHasNext: true,
 	}
-	handler := NewHandler(NewService(repo), pinsTestLogger(), "")
+	handler := NewHandler(usecase.NewService(repo), pinsTestLogger(), "")
 
 	req := httptest.NewRequest(
 		http.MethodPost,
@@ -119,8 +174,8 @@ func TestListHandlerNextCursor(t *testing.T) {
 		t.Fatalf("expected 200, got %d", rec.Code)
 	}
 	var body struct {
-		Pins       []model.Pin `json:"pins"`
-		NextCursor *Cursor     `json:"next_cursor"`
+		Pins       []domain.Pin   `json:"pins"`
+		NextCursor *domain.Cursor `json:"next_cursor"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
@@ -152,14 +207,14 @@ func TestGetByIDHandler(t *testing.T) {
 	}{
 		{"invalid id", "abc", &fakePinRepository{}, http.StatusBadRequest},
 		{"validation", "0", &fakePinRepository{}, http.StatusBadRequest},
-		{"not found", "42", &fakePinRepository{getErr: ErrPinNotFound}, http.StatusNotFound},
+		{"not found", "42", &fakePinRepository{getErr: domain.ErrPinNotFound}, http.StatusNotFound},
 		{"repository error", "42", &fakePinRepository{getErr: errors.New("database error")}, http.StatusInternalServerError},
-		{"success", "42", &fakePinRepository{getResult: model.Pin{ID: 42}}, http.StatusOK},
+		{"success", "42", &fakePinRepository{getResult: domain.Pin{ID: 42}}, http.StatusOK},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := NewHandler(NewService(tt.repo), pinsTestLogger(), "")
+			handler := NewHandler(usecase.NewService(tt.repo), pinsTestLogger(), "")
 			req := httptest.NewRequest(http.MethodGet, "/api/v1/pins/"+tt.pathValue, nil)
 			req.SetPathValue("pinID", tt.pathValue)
 			rec := httptest.NewRecorder()
@@ -190,7 +245,7 @@ func TestCreateHandler(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := NewHandler(NewService(tt.repo), pinsTestLogger(), "")
+			handler := NewHandler(usecase.NewService(tt.repo), pinsTestLogger(), "")
 
 			req := httptest.NewRequest(
 				http.MethodPost,
@@ -230,15 +285,15 @@ func TestCreateHandler(t *testing.T) {
 }
 
 func TestListHandlerWithCursor(t *testing.T) {
-	cursor := Cursor{
+	cursor := domain.Cursor{
 		CreatedAt: time.Date(2026, 10, 4, 0, 0, 0, 0, time.UTC),
 		ID:        10,
 	}
 
 	repo := &fakePinRepository{
-		listResult: []model.Pin{{ID: 9, CreatedAt: cursor.CreatedAt.Add(-time.Minute)}},
+		listResult: []domain.Pin{{ID: 9, CreatedAt: cursor.CreatedAt.Add(-time.Minute)}},
 	}
-	handler := NewHandler(NewService(repo), pinsTestLogger(), "")
+	handler := NewHandler(usecase.NewService(repo), pinsTestLogger(), "")
 
 	req := httptest.NewRequest(
 		http.MethodPost,
