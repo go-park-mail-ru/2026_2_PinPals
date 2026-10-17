@@ -9,25 +9,27 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"2026_2_PinPals/internal/auth"
+	authdelivery "2026_2_PinPals/auth_service/delivery"
+	authdomain "2026_2_PinPals/auth_service/domain"
 	"2026_2_PinPals/internal/config"
 	"2026_2_PinPals/internal/middleware"
-	"2026_2_PinPals/internal/model"
-	"2026_2_PinPals/internal/pins"
+	pindelivery "2026_2_PinPals/pin_service/delivery"
+	pindomain "2026_2_PinPals/pin_service/domain"
+	"2026_2_PinPals/pin_service/usecase"
 )
 
 type fakeServerAuthService struct{}
 
-func (fakeServerAuthService) Register(context.Context, model.RegisterInput) (model.User, error) {
-	return model.User{ID: 1, Name: "Alex", UserTag: "alex"}, nil
+func (fakeServerAuthService) Register(context.Context, authdomain.RegisterInput) (authdomain.User, error) {
+	return authdomain.User{ID: 1, Name: "Alex", UserTag: "alex"}, nil
 }
 
 func (fakeServerAuthService) Login(
 	context.Context,
-	model.LoginInput,
+	authdomain.LoginInput,
 	func(int) (string, error),
-) (model.AuthResponse, error) {
-	return model.AuthResponse{Token: "jwt", User: model.User{ID: 1}}, nil
+) (authdomain.AuthResponse, error) {
+	return authdomain.AuthResponse{Token: "jwt", User: authdomain.User{ID: 1}}, nil
 }
 
 type fakeServerPinRepository struct{}
@@ -35,9 +37,9 @@ type fakeServerPinRepository struct{}
 func (fakeServerPinRepository) Create(
 	_ context.Context,
 	creatorID int,
-	input model.CreatePinInput,
-) (model.Pin, error) {
-	return model.Pin{
+	input pindomain.CreatePinInput,
+) (pindomain.Pin, error) {
+	return pindomain.Pin{
 		ID:        1,
 		CreatorID: creatorID,
 		ImageURL:  input.ImageURL,
@@ -48,24 +50,24 @@ func (fakeServerPinRepository) Create(
 func (fakeServerPinRepository) List(
 	_ context.Context,
 	_ int,
-	_ *pins.Cursor,
-) ([]model.Pin, bool, error) {
-	return []model.Pin{{ID: 1, Name: "Beach"}}, false, nil
+	_ *pindomain.Cursor,
+) ([]pindomain.Pin, bool, error) {
+	return []pindomain.Pin{{ID: 1, Name: "Beach"}}, false, nil
 }
 
-func (fakeServerPinRepository) GetByID(context.Context, int) (model.Pin, error) {
-	return model.Pin{ID: 1, Name: "Beach"}, nil
+func (fakeServerPinRepository) GetByID(context.Context, int) (pindomain.Pin, error) {
+	return pindomain.Pin{ID: 1, Name: "Beach"}, nil
 }
 
 func TestNewRouter(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	authHandler := auth.NewHandler(
+	authHandler := authdelivery.NewHandler(
 		fakeServerAuthService{},
 		func(int) (string, error) { return "jwt", nil },
 		logger,
 	)
-	pinHandler := pins.NewHandler(
-		pins.NewService(fakeServerPinRepository{}),
+	pinHandler := pindelivery.NewHandler(
+		usecase.NewService(fakeServerPinRepository{}),
 		logger,
 		"",
 	)

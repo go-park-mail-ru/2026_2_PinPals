@@ -1,4 +1,4 @@
-package pins
+package delivery
 
 import (
 	"context"
@@ -10,26 +10,26 @@ import (
 
 	"2026_2_PinPals/internal/httpx"
 	"2026_2_PinPals/internal/middleware"
-	"2026_2_PinPals/internal/model"
+	"2026_2_PinPals/pin_service/domain"
 )
 
 type PinService interface {
 	Create(
 		ctx context.Context,
 		creatorID int,
-		input model.CreatePinInput,
-	) (model.Pin, error)
+		input domain.CreatePinInput,
+	) (domain.Pin, error)
 
 	List(
 		ctx context.Context,
 		limit int,
-		cursor *Cursor,
-	) (Page, error)
+		cursor *domain.Cursor,
+	) (domain.Page, error)
 
 	GetByID(
 		ctx context.Context,
 		id int,
-	) (model.Pin, error)
+	) (domain.Pin, error)
 }
 
 type Handler struct {
@@ -48,8 +48,8 @@ func NewHandler(service PinService, logger *slog.Logger, baseURL string) *Handle
 
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	type ListInput struct {
-		Limit  *int    `json:"limit"`
-		Cursor *Cursor `json:"cursor"`
+		Limit  *int           `json:"limit"`
+		Cursor *domain.Cursor `json:"cursor"`
 	}
 
 	var input ListInput
@@ -72,7 +72,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 
 	page, err := h.service.List(r.Context(), limit, cursor)
 	if err != nil {
-		if errors.Is(err, ErrValidation) {
+		if errors.Is(err, domain.ErrValidation) {
 			httpx.WriteError(w, http.StatusBadRequest, "invalid pagination")
 			return
 		}
@@ -91,15 +91,15 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pins := make([]model.Pin, len(page.Pins))
+	pins := make([]domain.Pin, len(page.Pins))
 
 	for i, pin := range page.Pins {
 		pins[i] = h.withImageURL(pin)
 	}
 
 	response := struct {
-		Pins       []model.Pin `json:"pins"`
-		NextCursor *Cursor     `json:"next_cursor,omitempty"`
+		Pins       []domain.Pin   `json:"pins"`
+		NextCursor *domain.Cursor `json:"next_cursor,omitempty"`
 	}{
 		Pins:       pins,
 		NextCursor: page.NextCursor,
@@ -118,10 +118,10 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 	pin, err := h.service.GetByID(r.Context(), id)
 	if err != nil {
 		switch {
-		case errors.Is(err, ErrValidation):
+		case errors.Is(err, domain.ErrValidation):
 			httpx.WriteError(w, http.StatusBadRequest, "invalid pin id")
 
-		case errors.Is(err, ErrPinNotFound):
+		case errors.Is(err, domain.ErrPinNotFound):
 			httpx.WriteError(w, http.StatusNotFound, "pin not found")
 
 		default:
@@ -153,14 +153,14 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var input model.CreatePinInput
+	var input domain.CreatePinInput
 	if err := httpx.DecodeJSON(w, r, &input); err != nil {
 		return
 	}
 
 	pin, err := h.service.Create(r.Context(), userID, input)
 	if err != nil {
-		if errors.Is(err, ErrValidation) {
+		if errors.Is(err, domain.ErrValidation) {
 			httpx.WriteError(w, http.StatusBadRequest, "invalid pin data")
 			return
 		}
@@ -185,7 +185,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusCreated, pin)
 }
 
-func (h *Handler) withImageURL(pin model.Pin) model.Pin {
+func (h *Handler) withImageURL(pin domain.Pin) domain.Pin {
 	if h.baseURL == "" {
 		return pin
 	}

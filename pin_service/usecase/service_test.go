@@ -1,4 +1,4 @@
-package pins
+package usecase
 
 import (
 	"context"
@@ -6,31 +6,31 @@ import (
 	"testing"
 	"time"
 
-	"2026_2_PinPals/internal/model"
+	"2026_2_PinPals/pin_service/domain"
 )
 
 type fakePinRepository struct {
-	createResult model.Pin
+	createResult domain.Pin
 	createErr    error
 
-	listResult  []model.Pin
+	listResult  []domain.Pin
 	listHasNext bool
 	listErr     error
 
-	getResult model.Pin
+	getResult domain.Pin
 	getErr    error
 }
 
 func (f *fakePinRepository) Create(
 	_ context.Context,
 	creatorID int,
-	input model.CreatePinInput,
-) (model.Pin, error) {
+	input domain.CreatePinInput,
+) (domain.Pin, error) {
 	if f.createErr != nil {
-		return model.Pin{}, f.createErr
+		return domain.Pin{}, f.createErr
 	}
 
-	return model.Pin{
+	return domain.Pin{
 		ID:          1,
 		CreatorID:   creatorID,
 		ImageURL:    input.ImageURL,
@@ -42,8 +42,8 @@ func (f *fakePinRepository) Create(
 func (f *fakePinRepository) List(
 	_ context.Context,
 	_ int,
-	_ *Cursor,
-) ([]model.Pin, bool, error) {
+	_ *domain.Cursor,
+) ([]domain.Pin, bool, error) {
 	if f.listErr != nil {
 		return nil, false, f.listErr
 	}
@@ -54,9 +54,9 @@ func (f *fakePinRepository) List(
 func (f *fakePinRepository) GetByID(
 	_ context.Context,
 	_ int,
-) (model.Pin, error) {
+) (domain.Pin, error) {
 	if f.getErr != nil {
-		return model.Pin{}, f.getErr
+		return domain.Pin{}, f.getErr
 	}
 
 	return f.getResult, nil
@@ -71,7 +71,7 @@ func TestCreatePin(t *testing.T) {
 	pin, err := service.Create(
 		context.Background(),
 		42,
-		model.CreatePinInput{
+		domain.CreatePinInput{
 			ImageURL:    " image.jpg ",
 			Name:        "  Beach  ",
 			Description: &description,
@@ -98,7 +98,7 @@ func TestCreatePin(t *testing.T) {
 func TestCreatePinValidation(t *testing.T) {
 	service := NewService(&fakePinRepository{})
 
-	tests := []model.CreatePinInput{
+	tests := []domain.CreatePinInput{
 		{
 			ImageURL: "",
 			Name:     "Beach",
@@ -116,7 +116,7 @@ func TestCreatePinValidation(t *testing.T) {
 			input,
 		)
 
-		if !errors.Is(err, ErrValidation) {
+		if !errors.Is(err, domain.ErrValidation) {
 			t.Fatalf(
 				"expected validation error, got %v",
 				err,
@@ -129,7 +129,7 @@ func TestListPins(t *testing.T) {
 	now := time.Now()
 
 	repo := &fakePinRepository{
-		listResult: []model.Pin{
+		listResult: []domain.Pin{
 			{
 				ID:        1,
 				CreatedAt: now,
@@ -183,7 +183,7 @@ func TestListInvalidLimit(t *testing.T) {
 		nil,
 	)
 
-	if !errors.Is(err, ErrValidation) {
+	if !errors.Is(err, domain.ErrValidation) {
 		t.Fatalf(
 			"expected validation error, got %v",
 			err,
@@ -200,7 +200,7 @@ func TestListTooLargeLimit(t *testing.T) {
 		nil,
 	)
 
-	if !errors.Is(err, ErrValidation) {
+	if !errors.Is(err, domain.ErrValidation) {
 		t.Fatalf(
 			"expected validation error, got %v",
 			err,
@@ -210,7 +210,7 @@ func TestListTooLargeLimit(t *testing.T) {
 
 func TestGetPin(t *testing.T) {
 	repo := &fakePinRepository{
-		getResult: model.Pin{
+		getResult: domain.Pin{
 			ID:   10,
 			Name: "Beach",
 		},
@@ -240,7 +240,7 @@ func TestGetPinInvalidID(t *testing.T) {
 		0,
 	)
 
-	if !errors.Is(err, ErrValidation) {
+	if !errors.Is(err, domain.ErrValidation) {
 		t.Fatalf(
 			"expected validation error, got %v",
 			err,
@@ -250,7 +250,7 @@ func TestGetPinInvalidID(t *testing.T) {
 
 func TestGetPinNotFound(t *testing.T) {
 	repo := &fakePinRepository{
-		getErr: ErrPinNotFound,
+		getErr: domain.ErrPinNotFound,
 	}
 
 	service := NewService(repo)
@@ -260,7 +260,7 @@ func TestGetPinNotFound(t *testing.T) {
 		10,
 	)
 
-	if !errors.Is(err, ErrPinNotFound) {
+	if !errors.Is(err, domain.ErrPinNotFound) {
 		t.Fatalf(
 			"expected not found, got %v",
 			err,

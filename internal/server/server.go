@@ -4,18 +4,18 @@ import (
 	"log/slog"
 	"net/http"
 
-	"2026_2_PinPals/internal/auth"
+	authdelivery "2026_2_PinPals/auth_service/delivery"
 	"2026_2_PinPals/internal/config"
 	"2026_2_PinPals/internal/images"
 	"2026_2_PinPals/internal/middleware"
-	"2026_2_PinPals/internal/pins"
+	pindelivery "2026_2_PinPals/pin_service/delivery"
 )
 
 func NewRouter(
 	cfg *config.Config,
 	logger *slog.Logger,
-	authHandler *auth.Handler,
-	pinHandler *pins.Handler,
+	authHandler *authdelivery.Handler,
+	pinHandler *pindelivery.Handler,
 	imageHandler *images.Handler,
 	tokenManager *middleware.TokenManager,
 ) http.Handler {
