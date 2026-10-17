@@ -24,12 +24,12 @@ func (r *Repository) Create(ctx context.Context, creatorID int, input model.Crea
 	const query = `
 		INSERT INTO pin (creator_id, image_url, name, description)
 		VALUES ($1, $2, $3, $4)
-		RETURNING pin_id, creator_id, image_url, name, description, deleted, created_at, updated_at, deleted_at
+		RETURNING pin_id, creator_id, image_url, name, description, created_at, updated_at, deleted_at
 	`
 
 	var pin model.Pin
 	err := r.pool.QueryRow(ctx, query, creatorID, input.ImageURL, input.Name, input.Description).Scan(
-		&pin.ID, &pin.CreatorID, &pin.ImageURL, &pin.Name, &pin.Description, &pin.Deleted, &pin.CreatedAt, &pin.UpdatedAt, &pin.DeletedAt,
+		&pin.ID, &pin.CreatorID, &pin.ImageURL, &pin.Name, &pin.Description, &pin.CreatedAt, &pin.UpdatedAt, &pin.DeletedAt,
 	)
 
 	return pin, err
@@ -48,7 +48,7 @@ func (r *Repository) List(ctx context.Context, limit int, cursor *Cursor) ([]mod
 	for rows.Next() {
 		var pin model.Pin
 		if err := rows.Scan(
-			&pin.ID, &pin.CreatorID, &pin.ImageURL, &pin.Name, &pin.Description, &pin.Deleted, &pin.CreatedAt, &pin.UpdatedAt, &pin.DeletedAt,
+			&pin.ID, &pin.CreatorID, &pin.ImageURL, &pin.Name, &pin.Description, &pin.CreatedAt, &pin.UpdatedAt, &pin.DeletedAt,
 		); err != nil {
 			return nil, false, err
 		}
@@ -69,9 +69,9 @@ func (r *Repository) List(ctx context.Context, limit int, cursor *Cursor) ([]mod
 
 func (r *Repository) buildListQuery(cursor *Cursor, limit int) (string, []any) {
 	const baseQuery = `
-		SELECT pin_id, creator_id, image_url, name, description, deleted, created_at, updated_at, deleted_at
+		SELECT pin_id, creator_id, image_url, name, description, created_at, updated_at, deleted_at
 		FROM pin
-		WHERE deleted = false
+		WHERE deleted_at = NULL
 	`
 
 	if cursor == nil {
@@ -92,14 +92,14 @@ func (r *Repository) buildListQuery(cursor *Cursor, limit int) (string, []any) {
 
 func (r *Repository) GetByID(ctx context.Context, id int) (model.Pin, error) {
 	const query = `
-		SELECT pin_id, creator_id, image_url, name, description, deleted, created_at, updated_at, deleted_at
+		SELECT pin_id, creator_id, image_url, name, description, created_at, updated_at, deleted_at
 		FROM pin
-		WHERE pin_id = $1 AND deleted = false
+		WHERE pin_id = $1 AND deleted_at = NULL
 	`
 
 	var pin model.Pin
 	err := r.pool.QueryRow(ctx, query, id).Scan(
-		&pin.ID, &pin.CreatorID, &pin.ImageURL, &pin.Name, &pin.Description, &pin.Deleted, &pin.CreatedAt, &pin.UpdatedAt, &pin.DeletedAt,
+		&pin.ID, &pin.CreatorID, &pin.ImageURL, &pin.Name, &pin.Description, &pin.CreatedAt, &pin.UpdatedAt, &pin.DeletedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return model.Pin{}, ErrPinNotFound

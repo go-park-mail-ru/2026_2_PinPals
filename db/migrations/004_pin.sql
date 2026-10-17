@@ -12,7 +12,6 @@ CREATE TABLE IF NOT EXISTS pin (
 
 COMMENT ON TABLE  pin             IS 'Пины — публикации изображений';
 COMMENT ON COLUMN pin.image_url   IS 'Ссылка на изображение в MinIO';
-COMMENT ON COLUMN pin.deleted     IS 'так реализован soft delete: если delete = true — учётная запись удалёна';
 COMMENT ON COLUMN pin.deleted_at  IS 'Момент soft delete; Если NULL, то запись активна';
 
 CREATE OR REPLACE TRIGGER trg_pin_updated_at

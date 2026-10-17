@@ -9,7 +9,6 @@ type User struct {
 	BirthDate   time.Time  `json:"birth_date"`
 	Description *string    `json:"description,omitempty"`
 	AvatarURL   *string    `json:"avatar_url,omitempty"`
-	Deleted     bool       `json:"-"`
 	CreatedAt   time.Time  `json:"-"`
 	UpdatedAt   time.Time  `json:"-"`
 	DeletedAt   *time.Time `json:"-"`
