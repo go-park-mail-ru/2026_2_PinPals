@@ -6,10 +6,9 @@ CREATE TABLE desk (
     description     text,
     avatar_img_url  text,
     entry_status    smallint    NOT NULL DEFAULT 0 CHECK (entry_status IN (0, 1, 2)),
-    deleted         boolean     NOT NULL DEFAULT false,
     created_at      timestamptz NOT NULL DEFAULT now(),
     updated_at      timestamptz NOT NULL DEFAULT now(),
-    deleted_at      timestamptz
+    deleted_at      timestamptz DEFAULT NULL
 );
 
 COMMENT ON TABLE  desk                IS 'Доски — коллекции пинов пользователя';
@@ -24,18 +23,11 @@ FOR EACH ROW
 WHEN (OLD.* IS DISTINCT FROM NEW.*)
 EXECUTE FUNCTION fn_set_updated_at();
 
-CREATE TRIGGER trg_desk_soft_delete
-BEFORE UPDATE ON desk
-FOR EACH ROW
-WHEN (NEW.deleted = true AND OLD.deleted = false)
-EXECUTE FUNCTION fn_set_deleted_at();
-
 ---- create above / drop below ----
 
 -- Write your migrate down statements here. If this migration is irreversible
 -- Then delete the separator line above.
 
 DROP TRIGGER IF EXISTS trg_desk_updated_at ON desk;
-DROP TRIGGER IF EXISTS trg_desk_soft_delete ON desk;
 
 DROP TABLE IF EXISTS desk;
