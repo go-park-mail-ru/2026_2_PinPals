@@ -11,7 +11,7 @@ RUN go mod download
 COPY . .
 
 # Статически слинкованный бинарник
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/app ./cmd/server/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/app ./cmd
 
 # ---------- Этап запуска ----------
 FROM --platform=linux/amd64 alpine:3.20

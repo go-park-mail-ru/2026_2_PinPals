@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"2026_2_PinPals/internal/middleware"
 	"2026_2_PinPals/pin_service/domain"
 	"2026_2_PinPals/pin_service/usecase"
+	"2026_2_PinPals/pkg/middleware"
 )
 
 type fakePinRepository struct {
@@ -173,10 +173,7 @@ func TestListHandlerNextCursor(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
 	}
-	var body struct {
-		Pins       []domain.Pin   `json:"pins"`
-		NextCursor *domain.Cursor `json:"next_cursor"`
-	}
+	var body ListResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}

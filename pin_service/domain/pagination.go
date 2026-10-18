@@ -3,8 +3,8 @@ package domain
 import "time"
 
 type Cursor struct {
-	CreatedAt time.Time `json:"created_at"`
-	ID        int       `json:"id"`
+	CreatedAt time.Time
+	ID        int
 }
 
 type Page struct {

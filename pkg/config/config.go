@@ -42,8 +42,6 @@ type CORSConfig struct {
 	AllowedOrigins []string
 }
 
-// MustLoad читает переменные окружения и возвращает Config.
-// Если обязательной настройки нет или она некорректна — вызывает panic.
 func MustLoad() *Config {
 	cfg := &Config{
 		App: AppConfig{

@@ -96,7 +96,7 @@ func (r *Repository) GetUserWithPasswordHash(ctx context.Context, userTag string
 		    u.created_at, u.updated_at, u.deleted_at, a.password_hash
 		FROM "user" u
 		JOIN "password" a ON a.user_id = u.user_id
-		WHERE u.user_tag = $1 AND u.deleted_at IS NULL
+		WHERE u.user_tag = $1 AND u.deleted_at = NULL
 	`
 
 	var user domain.User

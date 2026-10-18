@@ -9,7 +9,7 @@ help:
 	@echo "  make down  - stop docker compose"
 
 build:
-	go build ./cmd/server
+	go build ./cmd
 
 run:
 	docker compose up --build
@@ -18,7 +18,7 @@ tests:
 	go test ./...
 
 fmt:
-	gofmt -w ./cmd ./internal ./auth_service ./pin_service
+	gofmt -w ./cmd ./pkg ./auth_service ./pin_service
 
 down:
 	docker compose down
