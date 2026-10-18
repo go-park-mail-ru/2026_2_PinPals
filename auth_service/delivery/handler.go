@@ -7,7 +7,7 @@ import (
 	"net/http"
 
 	"2026_2_PinPals/auth_service/domain"
-	"2026_2_PinPals/internal/httpx"
+	"2026_2_PinPals/pkg/httpx"
 )
 
 type TokenIssuer func(userID int) (string, error)
@@ -36,11 +36,13 @@ func NewHandler(service AuthService, tokenIssuer TokenIssuer, logger *slog.Logge
 }
 
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
-	var input domain.RegisterInput
+	var req RegisterRequest
 
-	if err := httpx.DecodeJSON(w, r, &input); err != nil {
+	if err := httpx.DecodeJSON(w, r, &req); err != nil {
 		return
 	}
+
+	input := req.ToDomain()
 
 	user, err := h.service.Register(r.Context(), input)
 	if err != nil {
@@ -83,14 +85,16 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpx.WriteJSON(w, http.StatusCreated, user)
+	httpx.WriteJSON(w, http.StatusCreated, UserResponseFromDomain(user))
 }
 
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
-	var input domain.LoginInput
-	if err := httpx.DecodeJSON(w, r, &input); err != nil {
+	var req LoginRequest
+	if err := httpx.DecodeJSON(w, r, &req); err != nil {
 		return
 	}
+
+	input := req.ToDomain()
 
 	response, err := h.service.Login(r.Context(), input, h.tokenIssuer)
 	if err != nil {
@@ -113,5 +117,5 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpx.WriteJSON(w, http.StatusOK, response)
+	httpx.WriteJSON(w, http.StatusOK, AuthResponseFromDomain(response))
 }

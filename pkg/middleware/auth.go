@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"2026_2_PinPals/internal/httpx"
+	"2026_2_PinPals/pkg/httpx"
 	"context"
 	"errors"
 	"net/http"

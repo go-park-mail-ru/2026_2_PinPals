@@ -5,12 +5,11 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"strconv"
 
-	"2026_2_PinPals/internal/httpx"
-	"2026_2_PinPals/internal/middleware"
 	"2026_2_PinPals/pin_service/domain"
+	"2026_2_PinPals/pkg/httpx"
+	"2026_2_PinPals/pkg/middleware"
 )
 
 type PinService interface {
@@ -47,27 +46,15 @@ func NewHandler(service PinService, logger *slog.Logger, baseURL string) *Handle
 }
 
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
-	type ListInput struct {
-		Limit  *int           `json:"limit"`
-		Cursor *domain.Cursor `json:"cursor"`
-	}
-
-	var input ListInput
-	if err := httpx.DecodeJSON(w, r, &input); err != nil {
+	var req ListRequest
+	if err := httpx.DecodeJSON(w, r, &req); err != nil {
 		return
 	}
 
-	limit := 20
-	if input.Limit != nil {
-		limit = *input.Limit
-	}
-
-	cursor := input.Cursor
-	if cursor != nil {
-		if cursor.ID < 1 || cursor.CreatedAt.IsZero() {
-			httpx.WriteError(w, http.StatusBadRequest, "invalid cursor")
-			return
-		}
+	limit, cursor, err := req.ToDomain()
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid cursor")
+		return
 	}
 
 	page, err := h.service.List(r.Context(), limit, cursor)
@@ -91,21 +78,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pins := make([]domain.Pin, len(page.Pins))
-
-	for i, pin := range page.Pins {
-		pins[i] = h.withImageURL(pin)
-	}
-
-	response := struct {
-		Pins       []domain.Pin   `json:"pins"`
-		NextCursor *domain.Cursor `json:"next_cursor,omitempty"`
-	}{
-		Pins:       pins,
-		NextCursor: page.NextCursor,
-	}
-
-	httpx.WriteJSON(w, http.StatusOK, response)
+	httpx.WriteJSON(w, http.StatusOK, ListResponseFromDomain(page, h.baseURL))
 }
 
 func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
@@ -141,9 +114,7 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pin = h.withImageURL(pin)
-
-	httpx.WriteJSON(w, http.StatusOK, pin)
+	httpx.WriteJSON(w, http.StatusOK, PinResponseFromDomain(pin, h.baseURL))
 }
 
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
@@ -153,10 +124,12 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var input domain.CreatePinInput
-	if err := httpx.DecodeJSON(w, r, &input); err != nil {
+	var req CreatePinRequest
+	if err := httpx.DecodeJSON(w, r, &req); err != nil {
 		return
 	}
+
+	input := req.ToDomain()
 
 	pin, err := h.service.Create(r.Context(), userID, input)
 	if err != nil {
@@ -180,16 +153,5 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pin = h.withImageURL(pin)
-
-	httpx.WriteJSON(w, http.StatusCreated, pin)
-}
-
-func (h *Handler) withImageURL(pin domain.Pin) domain.Pin {
-	if h.baseURL == "" {
-		return pin
-	}
-
-	pin.ImageURL = h.baseURL + "/images/" + url.PathEscape(pin.ImageURL)
-	return pin
+	httpx.WriteJSON(w, http.StatusCreated, PinResponseFromDomain(pin, h.baseURL))
 }

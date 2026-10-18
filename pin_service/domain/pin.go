@@ -3,18 +3,18 @@ package domain
 import "time"
 
 type Pin struct {
-	ID          int        `json:"pin_id"`
-	CreatorID   int        `json:"creator_id"`
-	ImageURL    string     `json:"image_url"`
-	Name        string     `json:"name"`
-	Description *string    `json:"description,omitempty"`
-	CreatedAt   time.Time  `json:"-"`
-	UpdatedAt   time.Time  `json:"-"`
-	DeletedAt   *time.Time `json:"-"`
+	ID          int
+	CreatorID   int
+	ImageURL    string
+	Name        string
+	Description *string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	DeletedAt   *time.Time
 }
 
 type CreatePinInput struct {
-	ImageURL    string  `json:"image_url"`
-	Name        string  `json:"name"`
-	Description *string `json:"description,omitempty"`
+	ImageURL    string
+	Name        string
+	Description *string
 }
