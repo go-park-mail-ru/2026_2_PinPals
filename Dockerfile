@@ -1,6 +1,8 @@
 # ---------- Этап сборки ----------
 FROM golang:1.27-alpine AS builder
 
+ARG SERVICE
+
 WORKDIR /src
 
 # Сначала зависимости — они кешируются отдельно от кода
@@ -11,7 +13,7 @@ RUN go mod download
 COPY . .
 
 # Статически слинкованный бинарник
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/app ./cmd
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/app ./cmd/${SERVICE}
 
 # ---------- Этап запуска ----------
 FROM --platform=linux/amd64 alpine:3.20
