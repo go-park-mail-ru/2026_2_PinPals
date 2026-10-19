@@ -1,8 +1,9 @@
-package main
+package server
 
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -10,18 +11,17 @@ import (
 	"syscall"
 	"time"
 
-	"2026_2_PinPals/auth_service"
-	"2026_2_PinPals/pin_service"
 	"2026_2_PinPals/pkg/config"
 	"2026_2_PinPals/pkg/middleware"
-	"2026_2_PinPals/pkg/server"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func main() {
-	ctx := context.Background()
-
+func Run(
+	ctx context.Context,
+	setupDB func(context.Context, *config.Config, *slog.Logger) (*pgxpool.Pool, error),
+	registerRoutes func(*config.Config, *slog.Logger, *pgxpool.Pool, *http.ServeMux),
+) error {
 	cfg := config.MustLoad()
 
 	logger := slog.New(
@@ -33,19 +33,11 @@ func main() {
 		),
 	)
 
-	pool, err := pgxpool.New(ctx, cfg.Postgres.DSN())
+	pool, err := setupDB(ctx, cfg, logger)
 	if err != nil {
-		logger.Error("failed to create postgres pool", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("setup db: %w", err)
 	}
 	defer pool.Close()
-
-	pingCtx, cancelPoolPing := context.WithTimeout(ctx, 5*time.Second)
-	defer cancelPoolPing()
-	if err := pool.Ping(pingCtx); err != nil {
-		logger.Error("failed to connect to postgres", "error", err)
-		os.Exit(1)
-	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
@@ -53,15 +45,13 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
-
-	auth_service.Start(ctx, cfg, logger, pool, mux)
-	pin_service.Start(cfg, logger, pool, mux)
+	registerRoutes(cfg, logger, pool, mux)
 
 	var handler http.Handler = mux
-	handler = server.RequestLogger(logger)(handler)
+	handler = RequestLogger(logger)(handler)
 	handler = middleware.CORS(cfg.CORS.AllowedOrigins)(handler)
 
-	httpServer := server.New(":"+cfg.App.Port, handler)
+	httpServer := New(":"+cfg.App.Port, handler)
 
 	shutdownCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -80,7 +70,7 @@ func main() {
 	case err := <-errCh:
 		if err != nil {
 			logger.Error("server stopped unexpectedly", "error", err)
-			os.Exit(1)
+			return err
 		}
 	}
 
@@ -88,8 +78,9 @@ func main() {
 	defer cancelShutdown()
 	if err := httpServer.Shutdown(shutdownRequestCtx); err != nil {
 		logger.Error("graceful shutdown failed", "error", err)
-		os.Exit(1)
+		return err
 	}
 
 	logger.Info("server stopped")
+	return nil
 }

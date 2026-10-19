@@ -69,7 +69,7 @@ func (r *Repository) buildListQuery(cursor *domain.Cursor, limit int) (string, [
 	const baseQuery = `
 		SELECT pin_id, creator_id, image_url, name, description, created_at, updated_at, deleted_at
 		FROM pin
-		WHERE deleted_at = NULL
+		WHERE deleted_at IS NULL
 	`
 
 	if cursor == nil {
@@ -92,7 +92,7 @@ func (r *Repository) GetByID(ctx context.Context, id int) (domain.Pin, error) {
 	const query = `
 		SELECT pin_id, creator_id, image_url, name, description, created_at, updated_at, deleted_at
 		FROM pin
-		WHERE pin_id = $1 AND deleted_at = NULL
+		WHERE pin_id = $1 AND deleted_at IS NULL
 	`
 
 	var pin domain.Pin
