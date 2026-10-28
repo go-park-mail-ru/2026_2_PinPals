@@ -9,4 +9,4 @@ CREATE TABLE subscription (
 
 COMMENT ON TABLE  subscription IS 'Подписки: subscriber следит за subscribee';
 COMMENT ON CONSTRAINT subscription_no_self ON subscription IS 'Запрещает самоподписку';
-COMMENT ON subscription_unique_pair IS 'Обеспечивает, что один пользователь может подписаться на другого только один раз'
+COMMENT ON CONSTRAINT subscription_unique_pair ON subscription IS 'Обеспечивает, что один пользователь может подписаться на другого только один раз'

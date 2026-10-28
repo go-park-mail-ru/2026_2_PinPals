@@ -4,7 +4,6 @@ CREATE TABLE pin (
     image_url       text        NOT NULL UNIQUE,
     name            text        NOT NULL,
     description     text,
-    deleted         boolean     NOT NULL DEFAULT false,
     created_at      timestamptz NOT NULL DEFAULT now(),
     updated_at      timestamptz NOT NULL DEFAULT now(),
     deleted_at      timestamptz
@@ -12,5 +11,4 @@ CREATE TABLE pin (
 
 COMMENT ON TABLE  pin             IS 'Пины — публикации изображений';
 COMMENT ON COLUMN pin.image_url   IS 'Ссылка на изображение в MinIO';
-COMMENT ON COLUMN pin.deleted     IS 'так реализован soft delete: если delete = true — учётная запись удалёна';
 COMMENT ON COLUMN pin.deleted_at  IS 'Момент soft delete; Если NULL, то запись активна';

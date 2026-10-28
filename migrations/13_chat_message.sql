@@ -4,7 +4,6 @@ CREATE TABLE chat_message (
     author_id  integer     NOT NULL REFERENCES "user"(user_id) ON DELETE CASCADE,
     body       text        NOT NULL,
     related_to integer REFERENCES chat_message(message_id) ON DELETE SET NULL,
-    deleted    boolean     NOT NULL DEFAULT false,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
     deleted_at timestamptz,

@@ -5,7 +5,6 @@ CREATE TABLE desk (
     description     text,
     avatar_img_url  text,
     entry_status    smallint    NOT NULL DEFAULT 0 CHECK (entry_status IN (0, 1, 2)),
-    deleted         boolean     NOT NULL DEFAULT false,
     created_at      timestamptz NOT NULL DEFAULT now(),
     updated_at      timestamptz NOT NULL DEFAULT now(),
     deleted_at      timestamptz

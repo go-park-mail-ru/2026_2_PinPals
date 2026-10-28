@@ -1,5 +1,5 @@
 WITH inserted_user AS (
-    INSERT INTO "user" (name, user_tag, age, description, avatar_url)
+    INSERT INTO "user" (name, user_tag, birth_date, description, avatar_url)
     VALUES
         ('Alice',   'alice',   25, 'Photographer and traveler', 'https://minio.local/avatars/alice.png'),
         ('Bob',     'bob',     30, 'UI/UX designer',            'https://minio.local/avatars/bob.png'),

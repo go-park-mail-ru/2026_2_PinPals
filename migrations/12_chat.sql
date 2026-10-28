@@ -3,7 +3,6 @@ CREATE TABLE chat (
     user_a_id  integer     NOT NULL REFERENCES "user"(user_id) ON DELETE CASCADE,
     user_b_id  integer     NOT NULL REFERENCES "user"(user_id) ON DELETE CASCADE,
     name       text        NOT NULL,
-    deleted    boolean     NOT NULL DEFAULT false,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
     deleted_at timestamptz,
@@ -15,5 +14,5 @@ CREATE TABLE chat (
 COMMENT ON TABLE  chat                        IS 'Личные чаты между двумя пользователями';
 COMMENT ON COLUMN chat.user_a_id              IS 'Участник диалога а';
 COMMENT ON COLUMN chat.user_b_id              IS 'Участник диалога б';
-COMMENT ON COLUMN chat.chat_canonical_order   IS 'Гарантирует, что не будет дублирования чатов (A,B) и (B,A)';
+COMMENT ON CONSTRAINT chat.chat_canonical_order   IS 'Гарантирует, что не будет дублирования чатов (A,B) и (B,A)';
 COMMENT ON CONSTRAINT chat_no_self ON chat    IS 'Запрещает чат с самим собой';
