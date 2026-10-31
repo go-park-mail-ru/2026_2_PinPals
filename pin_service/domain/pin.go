@@ -17,4 +17,15 @@ type CreatePinInput struct {
 	ImageURL    string
 	Name        string
 	Description *string
+	Tags        []string 
+}
+
+type UpdatePinInput struct {
+	Name        *string
+	Description *string
+}
+
+type Tag struct {
+	ID   int
+	Name string
 }
