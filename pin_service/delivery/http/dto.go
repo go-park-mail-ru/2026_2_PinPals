@@ -9,9 +9,10 @@ import (
 )
 
 type CreatePinRequest struct {
-	ImageURL    string  `json:"image_url"`
-	Name        string  `json:"name"`
-	Description *string `json:"description,omitempty"`
+	ImageURL    string   `json:"image_url"`
+	Name        string   `json:"name"`
+	Description *string  `json:"description,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
 }
 
 func (r CreatePinRequest) ToDomain() domain.CreatePinInput {
@@ -19,6 +20,7 @@ func (r CreatePinRequest) ToDomain() domain.CreatePinInput {
 		ImageURL:    r.ImageURL,
 		Name:        r.Name,
 		Description: r.Description,
+		Tags:        r.Tags,
 	}
 }
 
