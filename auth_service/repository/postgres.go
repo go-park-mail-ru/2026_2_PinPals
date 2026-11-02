@@ -31,9 +31,7 @@ const queryCreateUser = `
             birth_date,
             description,
             avatar_url,
-            created_at,
-            updated_at,
-            deleted_at
+            created_at
     ),
     inserted_password AS (
         INSERT INTO "password" (user_id, password_hash)
@@ -48,9 +46,7 @@ const queryCreateUser = `
         u.birth_date,
         u.description,
         u.avatar_url,
-        u.created_at,
-        u.updated_at,
-        u.deleted_at
+        u.created_at
     FROM inserted_user AS u
     JOIN inserted_password AS p USING (user_id)
 `
@@ -64,8 +60,6 @@ const queryGetUserWithPasswordHash = `
         u.description,
         u.avatar_url,
         u.created_at,
-        u.updated_at,
-        u.deleted_at,
         p.password_hash
     FROM "user" AS u
     JOIN "password" AS p ON p.user_id = u.user_id
@@ -105,8 +99,6 @@ func (r *Repository) CreateUser(
 		&result.Description,
 		&result.AvatarURL,
 		&result.CreatedAt,
-		&result.UpdatedAt,
-		&result.DeletedAt,
 	)
 	if err != nil {
 		if isUserTagUniqueViolation(err) {
@@ -137,8 +129,6 @@ func (r *Repository) GetUserWithPasswordHash(
 		&user.Description,
 		&user.AvatarURL,
 		&user.CreatedAt,
-		&user.UpdatedAt,
-		&user.DeletedAt,
 		&passwordHash,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {

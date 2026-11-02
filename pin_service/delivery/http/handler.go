@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"2026_2_PinPals/pin_service/domain"
 	"2026_2_PinPals/pkg/httpx"
@@ -54,6 +55,11 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	limit, cursor, err := req.ToDomain()
 	if err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid cursor")
+		return
+	}
+
+	if limit < 1 || limit > 100 {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid limit")
 		return
 	}
 
@@ -126,6 +132,16 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 
 	var req CreatePinRequest
 	if err := httpx.DecodeJSON(w, r, &req); err != nil {
+		return
+	}
+
+	if strings.TrimSpace(req.Name) == "" ||
+    strings.TrimSpace(req.ImageURL) == "" {
+		httpx.WriteError(
+			w,
+			http.StatusBadRequest,
+			"name and image_url are required",
+		)
 		return
 	}
 
