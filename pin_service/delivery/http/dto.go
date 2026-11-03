@@ -8,8 +8,8 @@ import (
 )
 
 type CreatePinRequest struct {
-	ImageURL    string   `json:"image_url"`
-	Name        string   `json:"name"`
+	ImageURL    string   `json:"image_url" validate:"required"`
+	Name        string   `json:"name" validate:"required"`
 	Description *string  `json:"description,omitempty"`
 	Tags        []string `json:"tags,omitempty"`
 }
@@ -24,37 +24,37 @@ func (r CreatePinRequest) ToDomain() domain.CreatePinInput {
 }
 
 type CursorRequest struct {
-    CreatedAt time.Time `json:"created_at" validate:"required"`
-    ID        int       `json:"id" validate:"gte=1"`
+	CreatedAt time.Time `json:"created_at" validate:"required"`
+	ID        int       `json:"id" validate:"gte=1"`
 }
 
 func (c CursorRequest) ToDomain() domain.Cursor {
-    return domain.Cursor{
-        CreatedAt: c.CreatedAt,
-        ID:        c.ID,
-    }
+	return domain.Cursor{
+		CreatedAt: c.CreatedAt,
+		ID:        c.ID,
+	}
 }
 
 type ListRequest struct {
-    Limit  *int           `json:"limit" validate:"omitnil,min=1,max=100"`
-    Cursor *CursorRequest `json:"cursor" validate:"omitnil"`
+	Limit  *int           `json:"limit" validate:"omitnil,min=1,max=100"`
+	Cursor *CursorRequest `json:"cursor" validate:"omitnil"`
 }
 
 func (r ListRequest) ToDomain() (int, *domain.Cursor) {
-    limit := 20
+	limit := 20
 
-    if r.Limit != nil {
-        limit = *r.Limit
-    }
+	if r.Limit != nil {
+		limit = *r.Limit
+	}
 
-    var cursor *domain.Cursor
+	var cursor *domain.Cursor
 
-    if r.Cursor != nil {
-        c := r.Cursor.ToDomain()
-        cursor = &c
-    }
+	if r.Cursor != nil {
+		c := r.Cursor.ToDomain()
+		cursor = &c
+	}
 
-    return limit, cursor
+	return limit, cursor
 }
 
 type PinResponse struct {

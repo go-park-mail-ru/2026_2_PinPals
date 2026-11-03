@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/go-playground/validator/v10"
+
 	"2026_2_PinPals/pin_service/domain"
 	"2026_2_PinPals/pkg/httpx"
 	"2026_2_PinPals/pkg/middleware"
@@ -33,16 +35,23 @@ type PinService interface {
 }
 
 type Handler struct {
-	service PinService
-	logger  *slog.Logger
-	baseURL string
+	service          PinService
+	logger           *slog.Logger
+	baseURL          string
+	requestValidator *validator.Validate
 }
 
-func NewHandler(service PinService, logger *slog.Logger, baseURL string) *Handler {
+func NewHandler(
+	service PinService,
+	logger *slog.Logger,
+	baseURL string,
+	requestValidator *validator.Validate,
+) *Handler {
 	return &Handler{
-		service: service,
-		logger:  logger,
-		baseURL: baseURL,
+		service:          service,
+		logger:           logger,
+		baseURL:          baseURL,
+		requestValidator: requestValidator,
 	}
 }
 
@@ -52,7 +61,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := httpx.Validate(req); err != nil {
+	if err := h.requestValidator.Struct(req); err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid pagination")
 		return
 	}
@@ -131,12 +140,14 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if strings.TrimSpace(req.Name) == "" ||
-    strings.TrimSpace(req.ImageURL) == "" {
+	req.Name = strings.TrimSpace(req.Name)
+	req.ImageURL = strings.TrimSpace(req.ImageURL)
+
+	if err := h.requestValidator.Struct(req); err != nil {
 		httpx.WriteError(
 			w,
 			http.StatusBadRequest,
-			"name and image_url are required",
+			"invalid pin data",
 		)
 		return
 	}

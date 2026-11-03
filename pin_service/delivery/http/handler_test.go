@@ -15,6 +15,8 @@ import (
 	"2026_2_PinPals/pin_service/domain"
 	"2026_2_PinPals/pin_service/usecase"
 	"2026_2_PinPals/pkg/middleware"
+
+	"github.com/go-playground/validator/v10"
 )
 
 type fakePinRepository struct {
@@ -74,6 +76,16 @@ func pinsTestLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
+// Создаёт Handler для тестов с тестовым валидатором.
+func newPinsTestHandler(service PinService) *Handler {
+	return NewHandler(
+		service,
+		pinsTestLogger(),
+		"",
+		validator.New(),
+	)
+}
+
 func TestListHandler(t *testing.T) {
 	now := time.Date(2026, 10, 4, 0, 0, 0, 0, time.UTC)
 
@@ -128,7 +140,7 @@ func TestListHandler(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			service := usecase.NewService(tt.repo)
-			handler := NewHandler(service, pinsTestLogger(), "")
+			handler := newPinsTestHandler(service)
 
 			req := httptest.NewRequest(
 				http.MethodPost,
@@ -150,6 +162,7 @@ func TestListHandler(t *testing.T) {
 
 func TestListHandlerNextCursor(t *testing.T) {
 	now := time.Date(2026, 10, 4, 0, 0, 0, 0, time.UTC)
+
 	repo := &fakePinRepository{
 		listResult: []domain.Pin{
 			{ID: 1, CreatedAt: now},
@@ -158,7 +171,8 @@ func TestListHandlerNextCursor(t *testing.T) {
 		},
 		listHasNext: true,
 	}
-	handler := NewHandler(usecase.NewService(repo), pinsTestLogger(), "")
+
+	handler := newPinsTestHandler(usecase.NewService(repo))
 
 	req := httptest.NewRequest(
 		http.MethodPost,
@@ -173,6 +187,7 @@ func TestListHandlerNextCursor(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
 	}
+
 	var body ListResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
@@ -211,9 +226,15 @@ func TestGetByIDHandler(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := NewHandler(usecase.NewService(tt.repo), pinsTestLogger(), "")
-			req := httptest.NewRequest(http.MethodGet, "/api/v1/pins/"+tt.pathValue, nil)
+			handler := newPinsTestHandler(usecase.NewService(tt.repo))
+
+			req := httptest.NewRequest(
+				http.MethodGet,
+				"/api/v1/pins/"+tt.pathValue,
+				nil,
+			)
 			req.SetPathValue("pinID", tt.pathValue)
+
 			rec := httptest.NewRecorder()
 
 			handler.GetByID(rec, req)
@@ -242,7 +263,7 @@ func TestCreateHandler(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := NewHandler(usecase.NewService(tt.repo), pinsTestLogger(), "")
+			handler := newPinsTestHandler(usecase.NewService(tt.repo))
 
 			req := httptest.NewRequest(
 				http.MethodPost,
@@ -256,18 +277,24 @@ func TestCreateHandler(t *testing.T) {
 					[]byte("12345678901234567890123456789012"),
 					3600,
 				)
+
 				token, err := manager.Issue(42)
 				if err != nil {
 					t.Fatal(err)
 				}
+
 				req.Header.Set("Authorization", "Bearer "+token)
 
 				rec := httptest.NewRecorder()
-				manager.Middleware(http.HandlerFunc(handler.Create)).ServeHTTP(rec, req)
+
+				manager.Middleware(
+					http.HandlerFunc(handler.Create),
+				).ServeHTTP(rec, req)
 
 				if rec.Code != tt.wantStatus {
 					t.Fatalf("expected %d, got %d", tt.wantStatus, rec.Code)
 				}
+
 				return
 			}
 
@@ -288,9 +315,12 @@ func TestListHandlerWithCursor(t *testing.T) {
 	}
 
 	repo := &fakePinRepository{
-		listResult: []domain.Pin{{ID: 9, CreatedAt: cursor.CreatedAt.Add(-time.Minute)}},
+		listResult: []domain.Pin{
+			{ID: 9, CreatedAt: cursor.CreatedAt.Add(-time.Minute)},
+		},
 	}
-	handler := NewHandler(usecase.NewService(repo), pinsTestLogger(), "")
+
+	handler := newPinsTestHandler(usecase.NewService(repo))
 
 	req := httptest.NewRequest(
 		http.MethodPost,
