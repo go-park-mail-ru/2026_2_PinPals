@@ -33,8 +33,8 @@ const queryDeleteProfile = `
 
 func buildUpdateProfileQuery(
 	userID int,
-	input domain.UpdateProfileInput,
-) (string, []any, error) {
+	input *domain.UpdateProfileInput,
+) (string, []any) {
 	args := []any{userID}
 	setClauses := make([]string, 0, 4)
 
@@ -75,10 +75,6 @@ func buildUpdateProfileQuery(
 		addSet("avatar_url", avatarURL)
 	}
 
-	if len(setClauses) == 0 {
-		return "", nil, domain.ErrValidation
-	}
-
 	query := `UPDATE "user"
 SET ` + strings.Join(setClauses, ", ") + `,
     updated_at = now()
@@ -88,22 +84,19 @@ RETURNING
     user_id, name, user_tag, birth_date, description,
     avatar_url, created_at`
 
-	return query, args, nil
+	return query, args
 }
 
 func (r *Repository) UpdateProfile(
 	ctx context.Context,
 	userID int,
-	input domain.UpdateProfileInput,
-) (domain.User, error) {
-	var user domain.User
+	input *domain.UpdateProfileInput,
+) (*domain.User, error) {
+	user := &domain.User{}
 
-	query, args, err := buildUpdateProfileQuery(userID, input)
-	if err != nil {
-		return domain.User{}, err
-	}
+	query, args := buildUpdateProfileQuery(userID, input)
 
-	err = r.pool.QueryRow(ctx, query, args...).Scan(
+	err := r.pool.QueryRow(ctx, query, args...).Scan(
 		&user.ID,
 		&user.Name,
 		&user.UserTag,
@@ -114,15 +107,15 @@ func (r *Repository) UpdateProfile(
 	)
 
 	if errors.Is(err, pgx.ErrNoRows) {
-		return domain.User{}, domain.ErrUserNotFound
+		return nil, domain.ErrUserNotFound
 	}
 
 	if err != nil {
 		if isUserTagUniqueViolation(err) {
-			return domain.User{}, domain.ErrUserTagExists
+			return nil, domain.ErrUserTagExists
 		}
 
-		return domain.User{}, err
+		return nil, err
 	}
 
 	return user, nil

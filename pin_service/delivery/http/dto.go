@@ -1,7 +1,6 @@
 package http
 
 import (
-	"errors"
 	"net/url"
 	"time"
 
@@ -25,38 +24,37 @@ func (r CreatePinRequest) ToDomain() domain.CreatePinInput {
 }
 
 type CursorRequest struct {
-	CreatedAt time.Time `json:"created_at"`
-	ID        int       `json:"id"`
+    CreatedAt time.Time `json:"created_at" validate:"required"`
+    ID        int       `json:"id" validate:"gte=1"`
 }
 
 func (c CursorRequest) ToDomain() domain.Cursor {
-	return domain.Cursor{
-		CreatedAt: c.CreatedAt,
-		ID:        c.ID,
-	}
+    return domain.Cursor{
+        CreatedAt: c.CreatedAt,
+        ID:        c.ID,
+    }
 }
 
 type ListRequest struct {
-	Limit  *int           `json:"limit"`
-	Cursor *CursorRequest `json:"cursor"`
+    Limit  *int           `json:"limit" validate:"omitnil,min=1,max=100"`
+    Cursor *CursorRequest `json:"cursor" validate:"omitnil"`
 }
 
-func (r ListRequest) ToDomain() (int, *domain.Cursor, error) {
-	limit := 20
-	if r.Limit != nil {
-		limit = *r.Limit
-	}
+func (r ListRequest) ToDomain() (int, *domain.Cursor) {
+    limit := 20
 
-	var cursor *domain.Cursor
-	if r.Cursor != nil {
-		if r.Cursor.ID < 1 || r.Cursor.CreatedAt.IsZero() {
-			return 0, nil, errors.New("invalid cursor")
-		}
-		c := r.Cursor.ToDomain()
-		cursor = &c
-	}
+    if r.Limit != nil {
+        limit = *r.Limit
+    }
 
-	return limit, cursor, nil
+    var cursor *domain.Cursor
+
+    if r.Cursor != nil {
+        c := r.Cursor.ToDomain()
+        cursor = &c
+    }
+
+    return limit, cursor
 }
 
 type PinResponse struct {

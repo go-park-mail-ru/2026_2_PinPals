@@ -52,16 +52,12 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	limit, cursor, err := req.ToDomain()
-	if err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid cursor")
+	if err := httpx.Validate(req); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid pagination")
 		return
 	}
 
-	if limit < 1 || limit > 100 {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid limit")
-		return
-	}
+	limit, cursor := req.ToDomain()
 
 	page, err := h.service.List(r.Context(), limit, cursor)
 	if err != nil {
