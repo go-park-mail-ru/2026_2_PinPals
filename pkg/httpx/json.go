@@ -6,14 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"github.com/go-playground/validator/v10"
 )
-
-var requestValidator = validator.New()
-
-func Validate(value any) error {
-    return requestValidator.Struct(value)
-}
 
 func DecodeJSON(w http.ResponseWriter, r *http.Request, dst any) error {
 	contentType := r.Header.Get("Content-Type")
