@@ -82,6 +82,9 @@ func MustLoad() *Config {
 	if len(cfg.Auth.JWTSecret) < 32 {
 		panic("AUTH_JWT_SECRET must be at least 32 characters long")
 	}
+	if cfg.Auth.TokenTTL < time.Second {
+		panic("AUTH_TOKEN_TTL must be at least one second")
+	}
 
 	return cfg
 }

@@ -50,6 +50,7 @@ func Run(
 	var handler http.Handler = mux
 	handler = RequestLogger(logger)(handler)
 	handler = middleware.CORS(cfg.CORS.AllowedOrigins)(handler)
+	handler = middleware.SecurityHeaders(handler)
 
 	httpServer := New(":"+cfg.App.Port, handler)
 

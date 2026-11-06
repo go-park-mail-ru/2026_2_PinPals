@@ -2,19 +2,19 @@ package domain
 
 import "errors"
 
-var ErrUserNotFound = errors.New("user not found")
-var ErrUserTagExists = errors.New("user tag already exists")
-var ErrInvalidCredentials = errors.New("invalid credentials")
-var ErrValidation = errors.New("validation error")
+var ErrUserNotFound = errors.New("пользователь не найден")
+var ErrUserTagExists = errors.New("пользователь с таким тегом уже существует")
+var ErrInvalidCredentials = errors.New("неверный логин или пароль")
+var ErrValidation = errors.New("ошибка проверки данных")
 
 const (
-	ValidationRequired          = "required"
-	ValidationTooShort          = "too_short"
-	ValidationTooLong           = "too_long"
-	ValidationUnderage          = "underage"
-	ValidationTooOld            = "too_old"
-	ValidationFutureDate        = "future_date"
-	ValidationMustContainLetter = "must_contain_letter"
+	ValidationRequired          = "обязательное поле"
+	ValidationTooShort          = "значение слишком короткое"
+	ValidationTooLong           = "значение слишком длинное"
+	ValidationUnderage          = "возраст меньше допустимого"
+	ValidationTooOld            = "возраст превышает допустимый"
+	ValidationFutureDate        = "дата не может быть в будущем"
+	ValidationMustContainLetter = "пароль должен содержать хотя бы одну букву"
 )
 
 type ValidationErrors struct {
@@ -22,5 +22,5 @@ type ValidationErrors struct {
 }
 
 func (e *ValidationErrors) Error() string {
-	return "validation error"
+	return "ошибка проверки данных"
 }
