@@ -8,7 +8,5 @@ WORKDIR /app
 
 COPY --from=build /go/bin/tern /usr/local/bin/tern
 
-COPY db/tern.conf ./tern.conf
-COPY db/migrations ./migrations
-
-ENTRYPOINT ["tern", "migrate", "--config", "tern.conf", "--migrations", "migrations"]
+# Конфигурация и миграции монтируются как read-only volume из docker-compose.
+ENTRYPOINT ["tern", "migrate", "--config", "db/tern.conf", "--migrations", "db/migrations"]

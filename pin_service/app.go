@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	_ "2026_2_PinPals/docs/pin"
 	httphandler "2026_2_PinPals/pin_service/delivery/http"
 	"2026_2_PinPals/pin_service/repository"
 	"2026_2_PinPals/pin_service/usecase"
@@ -15,8 +16,10 @@ import (
 	"2026_2_PinPals/pkg/middleware"
 	"2026_2_PinPals/pkg/server"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	httpSwagger "github.com/swaggo/http-swagger/v2"
+
 	"github.com/go-playground/validator/v10"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func SetupPostgres(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*pgxpool.Pool, error) {
@@ -42,20 +45,37 @@ func RegisterRoutes(cfg *config.Config, logger *slog.Logger, pool *pgxpool.Pool,
 		[]byte(cfg.Auth.JWTSecret),
 		int64(cfg.Auth.TokenTTL/time.Second),
 	)
+	tokenManager.SetRevocationStore(middleware.NewPostgresTokenStore(pool))
 
 	pinRepository := repository.NewRepository(pool)
 	pinService := usecase.NewService(pinRepository)
 	requestValidator := validator.New()
-	pinHandler := httphandler.NewHandler(pinService,logger,cfg.App.BaseURL,requestValidator)
+	pinHandler := httphandler.NewHandler(pinService, cfg.App.BaseURL, requestValidator, images.NewStorage(cfg.App.ImageDir))
 	imageHandler := images.NewHandler(cfg.App.ImageDir)
 
 	mux.HandleFunc("POST /api/v1/pins/search", pinHandler.List)
 	mux.HandleFunc("GET /api/v1/pins/{pinID}", pinHandler.GetByID)
 	mux.Handle(
 		"POST /api/v1/pins",
-		tokenManager.Middleware(http.HandlerFunc(pinHandler.Create)),
+		middleware.CSRF(middleware.Access(tokenManager)(http.HandlerFunc(pinHandler.Create))),
 	)
+	deskService := usecase.NewDeskService(pinRepository)
+	deskHandler := httphandler.NewDeskHandler(deskService, cfg.App.BaseURL)
+	mux.Handle("POST /api/v1/desks", middleware.CSRF(middleware.Access(tokenManager)(http.HandlerFunc(deskHandler.Create))))
+	mux.Handle("GET /api/v1/desks/me", middleware.Access(tokenManager)(http.HandlerFunc(deskHandler.ListOwn)))
+	mux.HandleFunc("GET /api/v1/users/{userID}/desks", deskHandler.ListPublic)
+	mux.Handle("GET /api/v1/desks/{deskID}", middleware.OptionalAccess(tokenManager)(http.HandlerFunc(deskHandler.GetByID)))
+	mux.Handle("PATCH /api/v1/desks/{deskID}", middleware.CSRF(middleware.Access(tokenManager)(http.HandlerFunc(deskHandler.Update))))
+	mux.Handle("DELETE /api/v1/desks/{deskID}", middleware.CSRF(middleware.Access(tokenManager)(http.HandlerFunc(deskHandler.Delete))))
+	mux.Handle("POST /api/v1/desks/{deskID}/pins/{pinID}", middleware.CSRF(middleware.Access(tokenManager)(http.HandlerFunc(deskHandler.AddPin))))
+	mux.Handle("DELETE /api/v1/desks/{deskID}/pins/{pinID}", middleware.CSRF(middleware.Access(tokenManager)(http.HandlerFunc(deskHandler.RemovePin))))
+	likeService := usecase.NewLikeService(pinRepository)
+	likeHandler := httphandler.NewLikeHandler(likeService)
+	mux.Handle("POST /api/v1/pins/{pinID}/like", middleware.CSRF(middleware.Access(tokenManager)(http.HandlerFunc(likeHandler.Add))))
+	mux.Handle("DELETE /api/v1/pins/{pinID}/like", middleware.CSRF(middleware.Access(tokenManager)(http.HandlerFunc(likeHandler.Remove))))
+	mux.Handle("GET /api/v1/pins/{pinID}/likes", middleware.OptionalAccess(tokenManager)(http.HandlerFunc(likeHandler.GetStats)))
 	mux.HandleFunc("GET /images/{filename}", imageHandler.Get)
+	mux.Handle("GET /swagger/", httpSwagger.Handler(httpSwagger.URL("/swagger/doc.json")))
 }
 
 func Run(ctx context.Context) error {
