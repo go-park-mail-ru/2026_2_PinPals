@@ -15,8 +15,8 @@ import (
 	"2026_2_PinPals/pkg/middleware"
 	"2026_2_PinPals/pkg/server"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/go-playground/validator/v10"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func SetupPostgres(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*pgxpool.Pool, error) {
@@ -46,14 +46,14 @@ func RegisterRoutes(cfg *config.Config, logger *slog.Logger, pool *pgxpool.Pool,
 	pinRepository := repository.NewRepository(pool)
 	pinService := usecase.NewService(pinRepository)
 	requestValidator := validator.New()
-	pinHandler := httphandler.NewHandler(pinService,logger,cfg.App.BaseURL,requestValidator)
+	pinHandler := httphandler.NewHandler(pinService, cfg.App.BaseURL, requestValidator)
 	imageHandler := images.NewHandler(cfg.App.ImageDir)
 
 	mux.HandleFunc("POST /api/v1/pins/search", pinHandler.List)
 	mux.HandleFunc("GET /api/v1/pins/{pinID}", pinHandler.GetByID)
 	mux.Handle(
 		"POST /api/v1/pins",
-		tokenManager.Middleware(http.HandlerFunc(pinHandler.Create)),
+		middleware.Access(tokenManager)(http.HandlerFunc(pinHandler.Create)),
 	)
 	mux.HandleFunc("GET /images/{filename}", imageHandler.Get)
 }

@@ -89,7 +89,7 @@ func TestRegisterHandler(t *testing.T) {
 				registerResult: domain.User{ID: 1, Name: "Alex"},
 				registerErr:    tt.err,
 			}
-			handler := NewHandler(service, nil, testLogger())
+			handler := NewHandler(service, nil)
 
 			req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewBufferString(tt.body))
 			req.Header.Set("Content-Type", "application/json")
@@ -153,7 +153,6 @@ func TestLoginHandler(t *testing.T) {
 			handler := NewHandler(
 				service,
 				func(int) (string, error) { return "jwt", nil },
-				testLogger(),
 			)
 
 			req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewBufferString(tt.body))
@@ -171,7 +170,7 @@ func TestLoginHandler(t *testing.T) {
 
 func TestNewHandler(t *testing.T) {
 	service := &fakeAuthHandlerService{}
-	h := NewHandler(service, nil, testLogger())
+	h := NewHandler(service, nil)
 	if h.service != service {
 		t.Fatal("service was not stored")
 	}
@@ -181,7 +180,7 @@ func TestAuthJSONBirthDateCompatibility(t *testing.T) {
 	service := &fakeAuthHandlerService{
 		registerResult: domain.User{BirthDate: time.Date(2004, 7, 21, 0, 0, 0, 0, time.UTC)},
 	}
-	h := NewHandler(service, nil, testLogger())
+	h := NewHandler(service, nil)
 
 	req := httptest.NewRequest(
 		http.MethodPost,

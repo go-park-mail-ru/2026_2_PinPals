@@ -3,11 +3,11 @@ package http
 import (
 	"context"
 	"errors"
-	"log/slog"
 	"net/http"
 
 	"2026_2_PinPals/auth_service/domain"
 	"2026_2_PinPals/pkg/httpx"
+	"2026_2_PinPals/pkg/middleware"
 )
 
 type TokenIssuer func(userID int) (string, error)
@@ -28,11 +28,10 @@ type AuthService interface {
 type Handler struct {
 	service     AuthService
 	tokenIssuer TokenIssuer
-	logger      *slog.Logger
 }
 
-func NewHandler(service AuthService, tokenIssuer TokenIssuer, logger *slog.Logger) *Handler {
-	return &Handler{service: service, tokenIssuer: tokenIssuer, logger: logger}
+func NewHandler(service AuthService, tokenIssuer TokenIssuer) *Handler {
+	return &Handler{service: service, tokenIssuer: tokenIssuer}
 }
 
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
@@ -61,24 +60,24 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 				w,
 				http.StatusConflict,
 				map[string]any{
-					"error": "conflict",
+					"error": "конфликт",
 					"fields": map[string]string{
-						"user_tag": "already_exists",
+						"user_tag": "уже существует",
 					},
 				},
 			)
 
 		default:
-			h.logger.ErrorContext(
+			middleware.LoggerFromContext(r.Context()).ErrorContext(
 				r.Context(),
-				"failed to register user",
+				"не удалось зарегистрировать пользователя",
 				"error", err,
 			)
 
 			httpx.WriteError(
 				w,
 				http.StatusInternalServerError,
-				"failed to register user",
+				"не удалось зарегистрировать пользователя",
 			)
 		}
 
@@ -100,18 +99,18 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, domain.ErrValidation), errors.Is(err, domain.ErrInvalidCredentials):
-			httpx.WriteError(w, http.StatusUnauthorized, "invalid credentials")
+			httpx.WriteError(w, http.StatusUnauthorized, "неверный логин или пароль")
 		default:
-			h.logger.ErrorContext(
+			middleware.LoggerFromContext(r.Context()).ErrorContext(
 				r.Context(),
-				"failed to authenticate",
+				"не удалось выполнить вход",
 				"error", err,
 			)
 
 			httpx.WriteError(
 				w,
 				http.StatusInternalServerError,
-				"failed to authenticate",
+				"не удалось выполнить вход",
 			)
 		}
 		return

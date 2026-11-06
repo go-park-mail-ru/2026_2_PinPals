@@ -43,7 +43,7 @@ func RegisterRoutes(cfg *config.Config, logger *slog.Logger, pool *pgxpool.Pool,
 
 	authRepository := repository.NewRepository(pool)
 	authService := usecase.NewService(authRepository)
-	authHandler := httphandler.NewHandler(authService, tokenManager.Issue, logger)
+	authHandler := httphandler.NewHandler(authService, tokenManager.Issue)
 
 	mux.HandleFunc("POST /api/v1/auth/register", authHandler.Register)
 	mux.HandleFunc("POST /api/v1/auth/login", authHandler.Login)

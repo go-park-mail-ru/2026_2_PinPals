@@ -3,7 +3,6 @@ package http
 import (
 	"context"
 	"errors"
-	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -36,20 +35,17 @@ type PinService interface {
 
 type Handler struct {
 	service          PinService
-	logger           *slog.Logger
 	baseURL          string
 	requestValidator *validator.Validate
 }
 
 func NewHandler(
 	service PinService,
-	logger *slog.Logger,
 	baseURL string,
 	requestValidator *validator.Validate,
 ) *Handler {
 	return &Handler{
 		service:          service,
-		logger:           logger,
 		baseURL:          baseURL,
 		requestValidator: requestValidator,
 	}
@@ -75,7 +71,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		h.logger.ErrorContext(
+		middleware.LoggerFromContext(r.Context()).ErrorContext(
 			r.Context(),
 			"failed to get pins",
 			"error", err,
@@ -109,7 +105,7 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 			httpx.WriteError(w, http.StatusNotFound, "pin not found")
 
 		default:
-			h.logger.ErrorContext(
+			middleware.LoggerFromContext(r.Context()).ErrorContext(
 				r.Context(),
 				"failed to get pin",
 				"pin_id", id,
@@ -161,7 +157,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		h.logger.ErrorContext(
+		middleware.LoggerFromContext(r.Context()).ErrorContext(
 			r.Context(),
 			"failed to create pin",
 			"user_id", userID,

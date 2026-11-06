@@ -5,8 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -72,15 +70,10 @@ func (f *fakePinRepository) GetByID(
 	return f.getResult, nil
 }
 
-func pinsTestLogger() *slog.Logger {
-	return slog.New(slog.NewTextHandler(io.Discard, nil))
-}
-
 // Создаёт Handler для тестов с тестовым валидатором.
 func newPinsTestHandler(service PinService) *Handler {
 	return NewHandler(
 		service,
-		pinsTestLogger(),
 		"",
 		validator.New(),
 	)
