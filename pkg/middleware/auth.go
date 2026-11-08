@@ -28,6 +28,12 @@ type RevocationStore interface {
 	IsRevoked(ctx context.Context, tokenID string) (bool, error)
 }
 
+// UserStatusChecker — необязательное расширение RevocationStore: если хранилище его
+// реализует, токены удалённых (soft delete) пользователей отклоняются во всех сервисах.
+type UserStatusChecker interface {
+	IsUserDeleted(ctx context.Context, userID int) (bool, error)
+}
+
 type TokenManager struct {
 	secret []byte
 	ttl    int64
@@ -92,6 +98,25 @@ func (tm *TokenManager) parse(tokenString string) (*Claims, error) {
 	return claims, nil
 }
 
+// rejected сообщает, что токен нельзя принимать: он отозван, ошибка хранилища
+// или пользователь удалён.
+func (tm *TokenManager) rejected(ctx context.Context, claims *Claims) bool {
+	if tm.store == nil {
+		return false
+	}
+	revoked, err := tm.store.IsRevoked(ctx, claims.ID)
+	if err != nil || revoked {
+		return true
+	}
+	if checker, ok := tm.store.(UserStatusChecker); ok {
+		deleted, err := checker.IsUserDeleted(ctx, claims.UserID)
+		if err != nil || deleted {
+			return true
+		}
+	}
+	return false
+}
+
 func (tm *TokenManager) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tokenString := TokenFromRequest(r)
@@ -104,12 +129,9 @@ func (tm *TokenManager) Middleware(next http.Handler) http.Handler {
 			writeUnauthorized(w)
 			return
 		}
-		if tm.store != nil {
-			revoked, err := tm.store.IsRevoked(r.Context(), claims.ID)
-			if err != nil || revoked {
-				writeUnauthorized(w)
-				return
-			}
+		if tm.rejected(r.Context(), claims) {
+			writeUnauthorized(w)
+			return
 		}
 		ctx := context.WithValue(r.Context(), userIDKey, claims.UserID)
 		next.ServeHTTP(w, r.WithContext(ctx))
@@ -130,12 +152,9 @@ func (tm *TokenManager) OptionalMiddleware(next http.Handler) http.Handler {
 			writeUnauthorized(w)
 			return
 		}
-		if tm.store != nil {
-			revoked, storeErr := tm.store.IsRevoked(r.Context(), claims.ID)
-			if storeErr != nil || revoked {
-				writeUnauthorized(w)
-				return
-			}
+		if tm.rejected(r.Context(), claims) {
+			writeUnauthorized(w)
+			return
 		}
 		ctx := context.WithValue(r.Context(), userIDKey, claims.UserID)
 		next.ServeHTTP(w, r.WithContext(ctx))

@@ -106,6 +106,45 @@ func TestDeleteMeCallsService(t *testing.T) {
 	}
 }
 
+type fakeRevoker struct {
+	tokens []string
+	err    error
+}
+
+func (f *fakeRevoker) Revoke(_ context.Context, token string) error {
+	f.tokens = append(f.tokens, token)
+	return f.err
+}
+
+func TestDeleteMeRevokesTokenAndClearsCookies(t *testing.T) {
+	service := &fakeUserService{}
+	revoker := &fakeRevoker{}
+	h := NewHandler(service, HandlerOptions{TokenRevoker: revoker})
+	rec := serveAsUser(t, 9, http.HandlerFunc(h.DeleteMe), http.MethodDelete, "/api/v1/users/me", "")
+	if rec.Code != http.StatusNoContent || len(revoker.tokens) != 1 || revoker.tokens[0] == "" {
+		t.Fatalf("expected 204 and one revoked token, got status=%d tokens=%v", rec.Code, revoker.tokens)
+	}
+	cleared := 0
+	for _, c := range rec.Result().Cookies() {
+		if (c.Name == middleware.AccessTokenCookieName || c.Name == middleware.CSRFTokenCookieName) && c.MaxAge < 0 {
+			cleared++
+		}
+	}
+	if cleared != 2 {
+		t.Fatalf("expected both auth cookies to be cleared, got %d", cleared)
+	}
+}
+
+func TestDeleteMeDoesNotRevokeWhenDeleteFails(t *testing.T) {
+	service := &fakeUserService{deleteErr: errors.New("database unavailable")}
+	revoker := &fakeRevoker{}
+	h := NewHandler(service, HandlerOptions{TokenRevoker: revoker})
+	rec := serveAsUser(t, 9, http.HandlerFunc(h.DeleteMe), http.MethodDelete, "/api/v1/users/me", "")
+	if rec.Code != http.StatusInternalServerError || len(revoker.tokens) != 0 {
+		t.Fatalf("expected 500 without revocation, got status=%d tokens=%v", rec.Code, revoker.tokens)
+	}
+}
+
 func TestGetMeMapsNotFound(t *testing.T) {
 	service := &fakeUserService{getErr: domain.ErrUserNotFound}
 	h := NewHandler(service)

@@ -16,9 +16,28 @@ type UserService interface {
 	DeleteProfile(ctx context.Context, userID int) error
 }
 
-type Handler struct{ service UserService }
+// TokenRevoker отзывает JWT на сервере (реализуется middleware.TokenManager).
+type TokenRevoker interface {
+	Revoke(ctx context.Context, token string) error
+}
 
-func NewHandler(service UserService) *Handler { return &Handler{service: service} }
+type HandlerOptions struct {
+	TokenRevoker  TokenRevoker
+	SecureCookies bool
+}
+
+type Handler struct {
+	service UserService
+	options HandlerOptions
+}
+
+func NewHandler(service UserService, options ...HandlerOptions) *Handler {
+	h := &Handler{service: service}
+	if len(options) > 0 {
+		h.options = options[0]
+	}
+	return h
+}
 
 // GetMe godoc
 // @Summary Получить профиль текущего пользователя
@@ -89,6 +108,16 @@ func (h *Handler) DeleteMe(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, r, err, "failed to delete profile")
 		return
 	}
+	// Профиль удалён: отзываем текущий токен и очищаем cookie.
+	// Токены остальных сессий отклоняются middleware по признаку удалённого пользователя.
+	if h.options.TokenRevoker != nil {
+		if token := middleware.TokenFromRequest(r); token != "" {
+			if err := h.options.TokenRevoker.Revoke(r.Context(), token); err != nil {
+				middleware.LoggerFromContext(r.Context()).ErrorContext(r.Context(), "failed to revoke token after profile deletion", "error", err)
+			}
+		}
+	}
+	middleware.ClearAuthCookies(w, h.options.SecureCookies)
 	w.WriteHeader(http.StatusNoContent)
 }
 

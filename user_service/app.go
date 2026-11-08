@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	_ "2026_2_PinPals/docs/user"
@@ -40,7 +41,10 @@ func RegisterRoutes(cfg *config.Config, logger *slog.Logger, pool *pgxpool.Pool,
 	tokens.SetRevocationStore(middleware.NewPostgresTokenStore(pool))
 	repo := repository.NewRepository(pool)
 	service := usecase.NewService(repo)
-	handler := httphandler.NewHandler(service)
+	handler := httphandler.NewHandler(service, httphandler.HandlerOptions{
+		TokenRevoker:  tokens,
+		SecureCookies: strings.HasPrefix(cfg.App.BaseURL, "https://"),
+	})
 	access := middleware.Access(tokens)
 	mux.Handle("GET /api/v1/users/me", access(http.HandlerFunc(handler.GetMe)))
 	mux.Handle("PATCH /api/v1/users/me", middleware.CSRF(access(http.HandlerFunc(handler.UpdateMe))))
