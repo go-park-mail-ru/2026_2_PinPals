@@ -8,11 +8,22 @@ import (
 	"2026_2_PinPals/pin_service/domain"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// poolDB is the subset of pgxpool.Pool used by Repository. Keeping the
+// dependency behind this interface lets repository tests exercise SQL and
+// error mapping with pgxmock without a live PostgreSQL server.
+type poolDB interface {
+	Begin(context.Context) (pgx.Tx, error)
+	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
+	Query(context.Context, string, ...any) (pgx.Rows, error)
+	QueryRow(context.Context, string, ...any) pgx.Row
+}
+
 type Repository struct {
-	pool *pgxpool.Pool
+	pool poolDB
 }
 
 func NewRepository(pool *pgxpool.Pool) *Repository {
@@ -144,6 +155,17 @@ const queryAddLike = `
 	  AND deleted_at IS NULL
 	ON CONFLICT (liker_id, pin_id) DO NOTHING
 	RETURNING pin_like_id
+`
+
+const queryRemoveLike = `
+	DELETE FROM pin_like
+	WHERE liker_id = $1 AND pin_id = $2
+`
+
+const queryGetLikeStats = `
+	SELECT COUNT(*), COALESCE(BOOL_OR(liker_id = $1), false)
+	FROM pin_like
+	WHERE pin_id = $2
 `
 
 const queryCreateDesk = `
@@ -397,7 +419,7 @@ func (r *Repository) List(
 	limit int,
 	cursor *domain.Cursor,
 ) ([]domain.Pin, bool, error) {
-	
+
 	query, args := buildListQuery(cursor, limit)
 
 	rows, err := r.pool.Query(ctx, query, args...)
@@ -855,4 +877,37 @@ func (r *Repository) GetFirstPin(
 	}
 
 	return pin, nil
+}
+
+func (r *Repository) RemoveLike(ctx context.Context, userID, pinID int) error {
+	if userID < 1 || pinID < 1 {
+		return domain.ErrValidation
+	}
+	var exists bool
+	if err := r.pool.QueryRow(ctx, queryPinExists, pinID).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		return domain.ErrPinNotFound
+	}
+	_, err := r.pool.Exec(ctx, queryRemoveLike, userID, pinID)
+	return err
+}
+
+func (r *Repository) GetLikeStats(ctx context.Context, userID, pinID int) (domain.LikeStats, error) {
+	if pinID < 1 {
+		return domain.LikeStats{}, domain.ErrValidation
+	}
+	var exists bool
+	if err := r.pool.QueryRow(ctx, queryPinExists, pinID).Scan(&exists); err != nil {
+		return domain.LikeStats{}, err
+	}
+	if !exists {
+		return domain.LikeStats{}, domain.ErrPinNotFound
+	}
+	var result domain.LikeStats
+	if err := r.pool.QueryRow(ctx, queryGetLikeStats, userID, pinID).Scan(&result.Count, &result.LikedByMe); err != nil {
+		return domain.LikeStats{}, err
+	}
+	return result, nil
 }
