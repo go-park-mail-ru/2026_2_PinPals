@@ -61,7 +61,7 @@ func UserResponseFromDomain(u domain.User) UserResponse {
 }
 
 type AuthResponseDTO struct {
-	Token string       `json:"token"`
+	Token string       `json:"-"`
 	User  UserResponse `json:"user"`
 }
 
