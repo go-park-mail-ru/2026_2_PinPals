@@ -68,3 +68,8 @@ type UpdateDeskInput struct {
 	AvatarImgURL    *string
 	AvatarImgURLSet bool
 }
+
+type LikeStats struct {
+	Count     int  `json:"likes_count"`
+	LikedByMe bool `json:"liked_by_me"`
+}
