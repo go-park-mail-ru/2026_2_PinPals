@@ -53,7 +53,9 @@ func RegisterRoutes(cfg *config.Config, logger *slog.Logger, pool *pgxpool.Pool,
 	mux.HandleFunc("POST /api/v1/auth/register", authHandler.Register)
 	mux.HandleFunc("POST /api/v1/auth/login", authHandler.Login)
 	mux.Handle("POST /api/v1/auth/logout", middleware.CSRF(middleware.Access(tokenManager)(http.HandlerFunc(authHandler.Logout))))
-	mux.Handle("GET /swagger/", httpSwagger.Handler(httpSwagger.URL("/swagger/doc.json")))
+	if !cfg.App.IsProduction() {
+		mux.Handle("GET /swagger/", httpSwagger.Handler(httpSwagger.URL("/swagger/doc.json")))
+	}
 }
 
 func Run(ctx context.Context) error {

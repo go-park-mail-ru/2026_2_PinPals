@@ -40,6 +40,7 @@ down:
 
 generate-mocks:
 	go run go.uber.org/mock/mockgen@v0.6.0 -source=auth_service/usecase/service.go -destination=auth_service/usecase/mocks/mock_user_repository.go -package=mocks
+	go run go.uber.org/mock/mockgen@v0.6.0 -destination=auth_service/delivery/http/mocks/mock_token_revoker.go -package=mocks 2026_2_PinPals/auth_service/delivery/http TokenRevoker
 
 cover:
 	@go test -coverprofile=coverage.raw.out ./...

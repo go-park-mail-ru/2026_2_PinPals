@@ -160,3 +160,19 @@ func TestDSNAndHelpers(t *testing.T) {
 		t.Fatalf("unexpected duration: %v", got)
 	}
 }
+
+func TestAppConfigIsProduction(t *testing.T) {
+	for _, tc := range []struct {
+		env  string
+		want bool
+	}{
+		{env: "production", want: true},
+		{env: " Production ", want: true},
+		{env: "development", want: false},
+		{env: "test", want: false},
+	} {
+		if got := (AppConfig{Env: tc.env}).IsProduction(); got != tc.want {
+			t.Fatalf("IsProduction(%q)=%v, want %v", tc.env, got, tc.want)
+		}
+	}
+}

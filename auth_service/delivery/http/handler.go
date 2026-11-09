@@ -26,6 +26,8 @@ type AuthService interface {
 	) (domain.AuthResponse, error)
 }
 
+//go:generate go run go.uber.org/mock/mockgen@v0.6.0 -destination=mocks/mock_token_revoker.go -package=mocks 2026_2_PinPals/auth_service/delivery/http TokenRevoker
+
 type TokenRevoker interface {
 	Revoke(context.Context, string) error
 }
