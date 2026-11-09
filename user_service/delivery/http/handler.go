@@ -85,75 +85,122 @@ func (h *Handler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
+
+	// Определяем формат запроса.
 	contentType := r.Header.Get("Content-Type")
 	if contentType == "" {
 		contentType = "application/json"
 	}
+
 	mediaType, _, err := mime.ParseMediaType(contentType)
 	if err != nil {
-		httpx.WriteError(w, http.StatusUnsupportedMediaType, "unsupported content type")
+		httpx.WriteError(
+			w,
+			http.StatusUnsupportedMediaType,
+			"unsupported content type",
+		)
 		return
 	}
+
 	var input domain.UpdateProfileInput
 	var uploadedFilename string
 	var previousAvatar string
+
 	switch mediaType {
+
 	case "application/json":
 		var req UpdateProfileRequest
+
 		if err := httpx.DecodeJSON(w, r, &req); err != nil {
 			return
 		}
+
 		input, err = req.ToDomain()
 		if err != nil {
-			httpx.WriteError(w, http.StatusBadRequest, "invalid profile data")
+			httpx.WriteError(
+				w,
+				http.StatusBadRequest,
+				"invalid profile data",
+			)
 			return
 		}
+
 	case "multipart/form-data":
 		var parsed bool
 
 		input, uploadedFilename, previousAvatar, parsed =
 			h.parseMultipartProfile(w, r, userID)
+
 		if !parsed {
 			return
 		}
+
 	default:
-		httpx.WriteError(w, http.StatusUnsupportedMediaType, "content type must be application/json or multipart/form-data")
+		httpx.WriteError(
+			w,
+			http.StatusUnsupportedMediaType,
+			"content type must be application/json or multipart/form-data",
+		)
 		return
 	}
-	if input.AvatarURLSet && previousAvatar == "" {
+
+	cleanupUploadedAvatar := func() {
+		if uploadedFilename == "" || h.options.ImageStorage == nil {
+			return
+		}
+
+		if deleteErr := h.options.ImageStorage.Delete(uploadedFilename); deleteErr != nil {
+			middleware.LoggerFromContext(r.Context()).ErrorContext(
+				r.Context(),
+				"failed to delete unused uploaded avatar",
+				"filename", uploadedFilename,
+				"error", deleteErr,
+			)
+		}
+
+		uploadedFilename = ""
+	}
+
+	if mediaType == "application/json" && input.AvatarURLSet {
 		oldUser, err := h.service.GetProfile(r.Context(), userID)
 		if err != nil {
 			h.writeError(w, r, err, "failed to get old profile")
 			return
 		}
+
 		if oldUser.AvatarURL != nil {
 			previousAvatar = *oldUser.AvatarURL
 		}
 	}
-	user, err := h.service.UpdateProfile(r.Context(), userID, input)
+
+	user, err := h.service.UpdateProfile(
+		r.Context(),
+		userID,
+		input,
+	)
 	if err != nil {
-		if uploadedFilename != "" && h.options.ImageStorage != nil {
-			if deleteErr := h.options.ImageStorage.Delete(uploadedFilename); deleteErr != nil {
-				middleware.LoggerFromContext(r.Context()).ErrorContext(
-					r.Context(),
-					"failed to delete unused uploaded avatar",
-					"filename", uploadedFilename,
-					"error", deleteErr,
-				)
-			}
-		}
-		h.writeError(w, r, err, "failed to update profile")
+		cleanupUploadedAvatar()
+
+		h.writeError(
+			w,
+			r,
+			err,
+			"failed to update profile",
+		)
 		return
 	}
+
 	newAvatar := ""
 	if input.AvatarURL != nil {
 		newAvatar = *input.AvatarURL
 	}
+
 	if input.AvatarURLSet &&
 		previousAvatar != "" &&
 		previousAvatar != newAvatar &&
 		images.IsStoredFilename(previousAvatar) &&
 		h.options.ImageStorage != nil {
+
 		if err := h.options.ImageStorage.Delete(previousAvatar); err != nil {
 			middleware.LoggerFromContext(r.Context()).ErrorContext(
 				r.Context(),
@@ -163,7 +210,12 @@ func (h *Handler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 			)
 		}
 	}
-	httpx.WriteJSON(w, http.StatusOK, UserResponseFromDomain(*user, h.options.BaseURL))
+
+	httpx.WriteJSON(
+		w,
+		http.StatusOK,
+		UserResponseFromDomain(*user, h.options.BaseURL),
+	)
 }
 
 func (h *Handler) parseMultipartProfile(
@@ -173,15 +225,15 @@ func (h *Handler) parseMultipartProfile(
 ) (domain.UpdateProfileInput, string, string, bool) {
 	var input domain.UpdateProfileInput
 
-	r.Body = http.MaxBytesReader(w,r.Body,images.MaxUploadSize+(1<<20),)
+	r.Body = http.MaxBytesReader(w, r.Body, images.MaxUploadSize+(1<<20))
 
 	if err := r.ParseMultipartForm(1 << 20); err != nil {
 		var maxErr *http.MaxBytesError
 
 		if errors.As(err, &maxErr) {
-			httpx.WriteError(w,http.StatusRequestEntityTooLarge,"request body too large",)
+			httpx.WriteError(w, http.StatusRequestEntityTooLarge, "request body too large")
 		} else {
-			httpx.WriteError(w,http.StatusBadRequest,"invalid multipart form",)
+			httpx.WriteError(w, http.StatusBadRequest, "invalid multipart form")
 		}
 
 		return input, "", "", false
@@ -217,25 +269,25 @@ func (h *Handler) parseMultipartProfile(
 	}
 
 	if err != nil {
-		httpx.WriteError(w,http.StatusBadRequest,"invalid avatar file",)
+		httpx.WriteError(w, http.StatusBadRequest, "invalid avatar file")
 		return input, "", "", false
 	}
 
 	defer file.Close()
 
 	if header.Size > images.MaxUploadSize {
-		httpx.WriteError(w,http.StatusRequestEntityTooLarge,"avatar exceeds 10 MiB",)
+		httpx.WriteError(w, http.StatusRequestEntityTooLarge, "avatar exceeds 10 MiB")
 		return input, "", "", false
 	}
 
 	if h.options.ImageStorage == nil {
-		httpx.WriteError(w,http.StatusInternalServerError,"image storage is not configured",)
+		httpx.WriteError(w, http.StatusInternalServerError, "image storage is not configured")
 		return input, "", "", false
 	}
 
 	oldUser, err := h.service.GetProfile(r.Context(), userID)
 	if err != nil {
-		h.writeError(w,r,err,"failed to get old profile",)
+		h.writeError(w, r, err, "failed to get old profile")
 		return input, "", "", false
 	}
 
@@ -250,10 +302,10 @@ func (h *Handler) parseMultipartProfile(
 	if err != nil {
 		switch {
 		case errors.Is(err, images.ErrImageTooLarge):
-			httpx.WriteError(w,http.StatusRequestEntityTooLarge,"avatar exceeds 10 MiB",)
+			httpx.WriteError(w, http.StatusRequestEntityTooLarge, "avatar exceeds 10 MiB")
 
 		case errors.Is(err, images.ErrInvalidImage):
-			httpx.WriteError(w,http.StatusBadRequest,"unsupported image format",)
+			httpx.WriteError(w, http.StatusBadRequest, "unsupported image format")
 
 		default:
 			middleware.LoggerFromContext(r.Context()).ErrorContext(
@@ -262,7 +314,7 @@ func (h *Handler) parseMultipartProfile(
 				"error", err,
 			)
 
-			httpx.WriteError(w,http.StatusInternalServerError,"failed to save avatar",)
+			httpx.WriteError(w, http.StatusInternalServerError, "failed to save avatar")
 		}
 
 		return input, "", "", false
