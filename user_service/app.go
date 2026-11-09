@@ -12,6 +12,7 @@ import (
 	"2026_2_PinPals/pkg/config"
 	"2026_2_PinPals/pkg/middleware"
 	"2026_2_PinPals/pkg/server"
+	"2026_2_PinPals/pkg/images"
 
 	httphandler "2026_2_PinPals/user_service/delivery/http"
 	"2026_2_PinPals/user_service/repository"
@@ -44,6 +45,9 @@ func RegisterRoutes(cfg *config.Config, logger *slog.Logger, pool *pgxpool.Pool,
 	handler := httphandler.NewHandler(service, httphandler.HandlerOptions{
 		TokenRevoker:  tokens,
 		SecureCookies: strings.HasPrefix(cfg.App.BaseURL, "https://"),
+
+		BaseURL:     cfg.App.BaseURL,
+		ImageStorage: images.NewStorage(cfg.App.ImageDir),
 	})
 	access := middleware.Access(tokens)
 	mux.Handle("GET /api/v1/users/me", access(http.HandlerFunc(handler.GetMe)))

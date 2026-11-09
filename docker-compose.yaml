@@ -127,10 +127,15 @@ services:
     env_file:
       - .env
 
+    volumes:
+      - pin_images:/app/images
+
     depends_on:
       postgres:
         condition: service_healthy
       migrate:
+        condition: service_completed_successfully
+      image_storage_init:
         condition: service_completed_successfully
 
     networks:

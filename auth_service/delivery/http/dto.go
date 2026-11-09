@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"2026_2_PinPals/auth_service/domain"
+	"2026_2_PinPals/pkg/images"
 )
 
 type RegisterRequest struct {
@@ -48,26 +49,33 @@ type UserResponse struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
-func UserResponseFromDomain(u domain.User) UserResponse {
+func UserResponseFromDomain(u domain.User, baseURL string) UserResponse {
+	avatarURL := u.AvatarURL
+	if avatarURL != nil {
+		publicURL := images.PublicURL(baseURL, *avatarURL)
+		avatarURL = &publicURL
+	}
 	return UserResponse{
 		ID:          u.ID,
 		Name:        u.Name,
 		UserTag:     u.UserTag,
 		BirthDate:   u.BirthDate,
 		Description: u.Description,
-		AvatarURL:   u.AvatarURL,
+		AvatarURL:   avatarURL,
 		CreatedAt:   u.CreatedAt,
 	}
 }
-
 type AuthResponseDTO struct {
 	Token string       `json:"-"`
 	User  UserResponse `json:"user"`
 }
 
-func AuthResponseFromDomain(r domain.AuthResponse) AuthResponseDTO {
+func AuthResponseFromDomain(
+	r domain.AuthResponse,
+	baseURL string,
+) AuthResponseDTO {
 	return AuthResponseDTO{
 		Token: r.Token,
-		User:  UserResponseFromDomain(r.User),
+		User:  UserResponseFromDomain(r.User, baseURL),
 	}
 }

@@ -34,6 +34,7 @@ type HandlerOptions struct {
 	TokenRevoker  TokenRevoker
 	TokenTTL      time.Duration
 	SecureCookies bool
+	BaseURL       string
 }
 
 type Handler struct {
@@ -113,7 +114,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpx.WriteJSON(w, http.StatusCreated, UserResponseFromDomain(user))
+	httpx.WriteJSON(w, http.StatusCreated, UserResponseFromDomain(user, h.options.BaseURL))
 }
 
 // Login godoc
@@ -168,7 +169,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	middleware.SetAuthCookies(w, response.Token, csrfToken, h.options.TokenTTL, h.options.SecureCookies)
-	httpx.WriteJSON(w, http.StatusOK, AuthResponseFromDomain(response))
+	httpx.WriteJSON(w, http.StatusOK, AuthResponseFromDomain(response, h.options.BaseURL))
 }
 
 // Logout отзывает текущий JWT и очищает обе auth-cookie.

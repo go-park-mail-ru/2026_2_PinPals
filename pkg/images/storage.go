@@ -119,3 +119,27 @@ func validImageFilename(filename string) bool {
 		return false
 	}
 }
+
+func IsStoredFilename(filename string) bool {
+    if !validImageFilename(filename) {
+        return false
+    }
+
+    ext := strings.ToLower(filepath.Ext(filename))
+
+    switch ext {
+    case ".jpg", ".png", ".gif", ".webp":
+    default:
+        return false
+    }
+
+    name := strings.TrimSuffix(filename, filepath.Ext(filename))
+
+    if len(name) != 32 {
+        return false
+    }
+
+    _, err := hex.DecodeString(name)
+
+    return err == nil
+}
