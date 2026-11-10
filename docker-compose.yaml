@@ -45,13 +45,16 @@ services:
       - app-network
 
 
+  # templates/ contains demo image assets pin1.jpg ... pin30.jpg. Migration 005_insert.sql
+  # creates pin records referring to these exact filenames. The init container copies them
+  # once into the persistent pin_images volume shared by pin_service.
   image_storage_init:
     image: alpine:3.22
     user: "0:0"
     volumes:
       - ./templates:/source:ro
       - pin_images:/images
-    entrypoint: ["/bin/sh", "-c", "cp -an /source/. /images/ 2>/dev/null || true; chown -R 65534:65534 /images"]
+    entrypoint: ["/bin/sh", "-ec", "cp -an /source/. /images/; chown -R 65534:65534 /images"]
     restart: "no"
 
 
@@ -118,5 +121,4 @@ networks:
 
 volumes:
   postgres_data:
-  minio_data:
   pin_images:

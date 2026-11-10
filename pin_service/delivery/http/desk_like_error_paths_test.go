@@ -12,7 +12,7 @@ import (
 func TestDeskHandlerRemainingServiceErrorPaths(t *testing.T) {
 	t.Run("public list service error", func(t *testing.T) {
 		svc := &coverageDeskService{errByMethod: map[string]error{"list-public": errors.New("query failed")}}
-		h := NewDeskHandler(svc, "")
+		h := NewDeskHandler(svc, "", nil)
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/users/9/desks", nil)
 		req.SetPathValue("userID", "9")
 		rec := httptest.NewRecorder()
@@ -24,7 +24,7 @@ func TestDeskHandlerRemainingServiceErrorPaths(t *testing.T) {
 
 	t.Run("get desk internal error", func(t *testing.T) {
 		svc := &coverageDeskService{errByMethod: map[string]error{"get": errors.New("query failed")}}
-		h := NewDeskHandler(svc, "")
+		h := NewDeskHandler(svc, "", nil)
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/desks/4", nil)
 		req.SetPathValue("deskID", "4")
 		rec := httptest.NewRecorder()
@@ -49,7 +49,7 @@ func TestDeskHandlerRemainingServiceErrorPaths(t *testing.T) {
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
 				svc := &coverageDeskService{errByMethod: map[string]error{"update": tc.err}}
-				h := NewDeskHandler(svc, "")
+				h := NewDeskHandler(svc, "", nil)
 				rec := invokeWithUser(t, 7, http.HandlerFunc(h.Update), http.MethodPatch, "/api/v1/desks/4", `{"name":"Updated"}`, map[string]string{"deskID": "4"})
 				if rec.Code != tc.want {
 					t.Fatalf("status=%d want=%d body=%s", rec.Code, tc.want, rec.Body.String())
@@ -71,7 +71,7 @@ func TestDeskHandlerRemainingServiceErrorPaths(t *testing.T) {
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
 				svc := &coverageDeskService{errByMethod: map[string]error{"delete": tc.err}}
-				h := NewDeskHandler(svc, "")
+				h := NewDeskHandler(svc, "", nil)
 				rec := invokeWithUser(t, 7, http.HandlerFunc(h.Delete), http.MethodDelete, "/api/v1/desks/4", "", map[string]string{"deskID": "4"})
 				if rec.Code != tc.want {
 					t.Fatalf("status=%d want=%d body=%s", rec.Code, tc.want, rec.Body.String())
@@ -101,7 +101,7 @@ func TestDeskHandlerRemainingServiceErrorPaths(t *testing.T) {
 					methodKey = "remove-pin"
 				}
 				svc := &coverageDeskService{errByMethod: map[string]error{methodKey: tc.err}}
-				h := NewDeskHandler(svc, "")
+				h := NewDeskHandler(svc, "", nil)
 				rec := invokeWithUser(t, 7, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { tc.call(h, w, r) }), tc.method, tc.path, "", map[string]string{"deskID": "4", "pinID": "8"})
 				if rec.Code != tc.want {
 					t.Fatalf("status=%d want=%d body=%s", rec.Code, tc.want, rec.Body.String())
@@ -110,7 +110,7 @@ func TestDeskHandlerRemainingServiceErrorPaths(t *testing.T) {
 		}
 
 		svc := &coverageDeskService{}
-		h := NewDeskHandler(svc, "")
+		h := NewDeskHandler(svc, "", nil)
 		rec := invokeWithUser(t, 7, http.HandlerFunc(h.RemovePin), http.MethodDelete, "/api/v1/desks/4/pins/8", "", map[string]string{"deskID": "4", "pinID": "8"})
 		if rec.Code != http.StatusNoContent || len(svc.calls) == 0 || svc.calls[len(svc.calls)-1] != "remove-pin" {
 			t.Fatalf("status=%d calls=%v body=%s", rec.Code, svc.calls, rec.Body.String())

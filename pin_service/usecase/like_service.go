@@ -1,5 +1,7 @@
 package usecase
 
+//go:generate go run go.uber.org/mock/mockgen@v0.6.0 -source=like_service.go -destination=mocks/mock_like_repository.go -package=mocks
+
 import (
 	"2026_2_PinPals/pin_service/domain"
 	"context"

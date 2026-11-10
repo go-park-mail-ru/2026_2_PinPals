@@ -55,6 +55,9 @@ func NewHandler(
 		Delete(string) error
 	},
 ) *Handler {
+	if requestValidator == nil {
+		requestValidator = validator.New()
+	}
 	var imageStorage interface {
 		Save(io.Reader) (string, error)
 		Delete(string) error
@@ -86,7 +89,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.requestValidator.Struct(req); err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid pagination")
+		httpx.WriteError(w, http.StatusBadRequest, "Некорректные параметры пагинации")
 		return
 	}
 
@@ -95,7 +98,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	page, err := h.service.List(r.Context(), limit, cursor)
 	if err != nil {
 		if errors.Is(err, domain.ErrValidation) {
-			httpx.WriteError(w, http.StatusBadRequest, "invalid pagination")
+			httpx.WriteError(w, http.StatusBadRequest, "Некорректные параметры пагинации")
 			return
 		}
 
@@ -108,7 +111,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(
 			w,
 			http.StatusInternalServerError,
-			"failed to get pins",
+			"Не удалось получить список пинов",
 		)
 		return
 	}
@@ -127,7 +130,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(r.PathValue("pinID"))
 	if err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid pin id")
+		httpx.WriteError(w, http.StatusBadRequest, "Некорректный идентификатор пина")
 		return
 	}
 
@@ -135,10 +138,10 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, domain.ErrValidation):
-			httpx.WriteError(w, http.StatusBadRequest, "invalid pin id")
+			httpx.WriteError(w, http.StatusBadRequest, "Некорректный идентификатор пина")
 
 		case errors.Is(err, domain.ErrPinNotFound):
-			httpx.WriteError(w, http.StatusNotFound, "pin not found")
+			httpx.WriteError(w, http.StatusNotFound, "Пин не найден")
 
 		default:
 			middleware.LoggerFromContext(r.Context()).ErrorContext(
@@ -151,7 +154,7 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 			httpx.WriteError(
 				w,
 				http.StatusInternalServerError,
-				"failed to get pin",
+				"Не удалось получить пин",
 			)
 		}
 		return
@@ -178,11 +181,11 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
-		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized")
+		httpx.WriteError(w, http.StatusUnauthorized, "Не авторизован")
 		return
 	}
 	if h.imageStorage == nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "image storage is not configured")
+		httpx.WriteError(w, http.StatusInternalServerError, "Хранилище изображений не настроено")
 		return
 	}
 
@@ -191,9 +194,9 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseMultipartForm(1 << 20); err != nil {
 		var maxErr *http.MaxBytesError
 		if errors.As(err, &maxErr) {
-			httpx.WriteError(w, http.StatusRequestEntityTooLarge, "request body too large")
+			httpx.WriteError(w, http.StatusRequestEntityTooLarge, "Тело запроса слишком большое")
 		} else {
-			httpx.WriteError(w, http.StatusBadRequest, "invalid multipart form")
+			httpx.WriteError(w, http.StatusBadRequest, "Некорректная форма загрузки")
 		}
 		return
 	}
@@ -202,19 +205,19 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	file, header, err := r.FormFile("image")
 	if err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "image file is required")
+		httpx.WriteError(w, http.StatusBadRequest, "Необходимо приложить изображение")
 		return
 	}
 	defer file.Close()
 	if header.Size > images.MaxUploadSize {
-		httpx.WriteError(w, http.StatusRequestEntityTooLarge, "image exceeds 10 MiB")
+		httpx.WriteError(w, http.StatusRequestEntityTooLarge, "Изображение превышает 10 МиБ")
 		return
 	}
 
 	var tags []string
 	if rawTags := strings.TrimSpace(r.FormValue("tags")); rawTags != "" {
 		if err := json.Unmarshal([]byte(rawTags), &tags); err != nil {
-			httpx.WriteError(w, http.StatusBadRequest, "tags must be a JSON array of strings")
+			httpx.WriteError(w, http.StatusBadRequest, "Поле tags должно содержать JSON-массив строк")
 			return
 		}
 	}
@@ -225,7 +228,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	req := CreatePinRequest{Name: strings.TrimSpace(r.FormValue("name")), Description: description, Tags: tags}
 	if err := h.requestValidator.Struct(req); err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid pin data")
+		httpx.WriteError(w, http.StatusBadRequest, "Некорректные данные пина")
 		return
 	}
 
@@ -237,8 +240,8 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, images.ErrInvalidImage):
 			httpx.WriteError(w, http.StatusBadRequest, "недопустимый формат изображения")
 		default:
-			middleware.LoggerFromContext(r.Context()).ErrorContext(r.Context(), "не удалось сохранить изображение", "error", err)
-			httpx.WriteError(w, http.StatusInternalServerError, "не удалось сохранить изображение")
+			middleware.LoggerFromContext(r.Context()).ErrorContext(r.Context(), "failed to save image", "error", err)
+			httpx.WriteError(w, http.StatusInternalServerError, "failed to save image")
 		}
 		return
 	}
@@ -247,11 +250,11 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		_ = h.imageStorage.Delete(filename)
 		if errors.Is(err, domain.ErrValidation) {
-			httpx.WriteError(w, http.StatusBadRequest, "invalid pin data")
+			httpx.WriteError(w, http.StatusBadRequest, "Некорректные данные пина")
 			return
 		}
 		middleware.LoggerFromContext(r.Context()).ErrorContext(r.Context(), "failed to create pin", "user_id", userID, "error", err)
-		httpx.WriteError(w, http.StatusInternalServerError, "failed to create pin")
+		httpx.WriteError(w, http.StatusInternalServerError, "Не удалось создать пин")
 		return
 	}
 	httpx.WriteJSON(w, http.StatusCreated, PinResponseFromDomain(pin, h.baseURL))

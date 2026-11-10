@@ -151,7 +151,7 @@ func invokeWithUser(t *testing.T, userID int, handler http.Handler, method, targ
 
 func TestDeskHandlerListOwnBranches(t *testing.T) {
 	t.Run("unauthorized", func(t *testing.T) {
-		h := NewDeskHandler(&coverageDeskService{}, "")
+		h := NewDeskHandler(&coverageDeskService{}, "", nil)
 		rec := invokeWithUser(t, 0, http.HandlerFunc(h.ListOwn), http.MethodGet, "/api/v1/desks/me", "", nil)
 		if rec.Code != http.StatusUnauthorized {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
@@ -160,7 +160,7 @@ func TestDeskHandlerListOwnBranches(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		svc := &coverageDeskService{desks: []domain.Desk{{ID: 2, CreatorID: 7, Name: "Travel"}}}
-		h := NewDeskHandler(svc, "")
+		h := NewDeskHandler(svc, "", nil)
 		rec := invokeWithUser(t, 7, http.HandlerFunc(h.ListOwn), http.MethodGet, "/api/v1/desks/me", "", nil)
 		if rec.Code != http.StatusOK || svc.userID != 7 || !strings.Contains(rec.Body.String(), "Travel") {
 			t.Fatalf("status=%d user=%d body=%s", rec.Code, svc.userID, rec.Body.String())
@@ -169,7 +169,7 @@ func TestDeskHandlerListOwnBranches(t *testing.T) {
 
 	t.Run("service error", func(t *testing.T) {
 		svc := &coverageDeskService{errByMethod: map[string]error{"list-own": errors.New("db down")}}
-		h := NewDeskHandler(svc, "")
+		h := NewDeskHandler(svc, "", nil)
 		rec := invokeWithUser(t, 7, http.HandlerFunc(h.ListOwn), http.MethodGet, "/api/v1/desks/me", "", nil)
 		if rec.Code != http.StatusInternalServerError {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
@@ -178,7 +178,7 @@ func TestDeskHandlerListOwnBranches(t *testing.T) {
 }
 
 func TestDeskHandlerListPublicBranches(t *testing.T) {
-	h := NewDeskHandler(&coverageDeskService{}, "")
+	h := NewDeskHandler(&coverageDeskService{}, "", nil)
 	bad := httptest.NewRequest(http.MethodGet, "/api/v1/users/nope/desks", nil)
 	bad.SetPathValue("userID", "nope")
 	badRec := httptest.NewRecorder()
@@ -188,7 +188,7 @@ func TestDeskHandlerListPublicBranches(t *testing.T) {
 	}
 
 	svc := &coverageDeskService{desks: []domain.Desk{{ID: 4, CreatorID: 9, Name: "Public"}}}
-	h = NewDeskHandler(svc, "")
+	h = NewDeskHandler(svc, "", nil)
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/users/9/desks", nil)
 	req.SetPathValue("userID", "9")
@@ -200,7 +200,7 @@ func TestDeskHandlerListPublicBranches(t *testing.T) {
 
 func TestDeskHandlerCreateBadJSONAndMappedErrors(t *testing.T) {
 	t.Run("bad json", func(t *testing.T) {
-		h := NewDeskHandler(&coverageDeskService{}, "")
+		h := NewDeskHandler(&coverageDeskService{}, "", nil)
 		rec := invokeWithUser(t, 3, http.HandlerFunc(h.Create), http.MethodPost, "/api/v1/desks", "{", nil)
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
@@ -221,7 +221,7 @@ func TestDeskHandlerCreateBadJSONAndMappedErrors(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			svc := &coverageDeskService{errByMethod: map[string]error{"create": tc.err}}
-			h := NewDeskHandler(svc, "")
+			h := NewDeskHandler(svc, "", nil)
 			rec := invokeWithUser(t, 3, http.HandlerFunc(h.Create), http.MethodPost, "/api/v1/desks", `{"name":"Art","entry_status":0}`, nil)
 			if rec.Code != tc.want {
 				t.Fatalf("status=%d want=%d body=%s", rec.Code, tc.want, rec.Body.String())
@@ -231,7 +231,7 @@ func TestDeskHandlerCreateBadJSONAndMappedErrors(t *testing.T) {
 }
 
 func TestDeskHandlerGetByIDBranches(t *testing.T) {
-	h := NewDeskHandler(&coverageDeskService{}, "")
+	h := NewDeskHandler(&coverageDeskService{}, "", nil)
 	bad := httptest.NewRequest(http.MethodGet, "/api/v1/desks/nope", nil)
 	bad.SetPathValue("deskID", "nope")
 	badRec := httptest.NewRecorder()
@@ -242,7 +242,7 @@ func TestDeskHandlerGetByIDBranches(t *testing.T) {
 
 	pin := domain.Pin{ID: 8, CreatorID: 5, ImageURL: "pin.jpg", Name: "Beach"}
 	svc := &coverageDeskService{withPins: domain.DeskWithPins{Desk: domain.Desk{ID: 4, CreatorID: 5, Name: "Summer", AvatarImgURL: stringPtr("avatar one.jpg")}, Pins: []domain.Pin{pin}}}
-	h = NewDeskHandler(svc, "https://cdn.example")
+	h = NewDeskHandler(svc, "https://cdn.example", nil)
 	rec := invokeWithUser(t, 0, http.HandlerFunc(h.GetByID), http.MethodGet, "/api/v1/desks/4", "", map[string]string{"deskID": "4"})
 	if rec.Code != http.StatusOK || svc.userID != 0 || svc.deskID != 4 || !strings.Contains(rec.Body.String(), "https://cdn.example/images/avatar%20one.jpg") || !strings.Contains(rec.Body.String(), "https://cdn.example/images/pin.jpg") {
 		t.Fatalf("status=%d requester=%d desk=%d body=%s", rec.Code, svc.userID, svc.deskID, rec.Body.String())
@@ -253,7 +253,7 @@ func TestDeskHandlerGetByIDBranches(t *testing.T) {
 		want int
 	}{{domain.ErrDeskForbidden, http.StatusForbidden}, {domain.ErrDeskNotFound, http.StatusNotFound}} {
 		svc := &coverageDeskService{errByMethod: map[string]error{"get": tc.err}}
-		h := NewDeskHandler(svc, "")
+		h := NewDeskHandler(svc, "", nil)
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/desks/4", nil)
 		req.SetPathValue("deskID", "4")
 		rec := httptest.NewRecorder()
@@ -265,7 +265,7 @@ func TestDeskHandlerGetByIDBranches(t *testing.T) {
 }
 
 func TestDeskHandlerUpdateBranches(t *testing.T) {
-	h := NewDeskHandler(&coverageDeskService{}, "")
+	h := NewDeskHandler(&coverageDeskService{}, "", nil)
 	unauthorized := invokeWithUser(t, 0, http.HandlerFunc(h.Update), http.MethodPatch, "/api/v1/desks/4", `{}`, map[string]string{"deskID": "4"})
 	if unauthorized.Code != http.StatusUnauthorized {
 		t.Fatalf("unauthorized status=%d", unauthorized.Code)
@@ -284,7 +284,7 @@ func TestDeskHandlerUpdateBranches(t *testing.T) {
 	}
 
 	svc := &coverageDeskService{}
-	h = NewDeskHandler(svc, "")
+	h = NewDeskHandler(svc, "", nil)
 	rec := invokeWithUser(t, 5, http.HandlerFunc(h.Update), http.MethodPatch, "/api/v1/desks/4", `{"description":null,"avatar_img_url":"new.jpg","entry_status":1}`, map[string]string{"deskID": "4"})
 	if rec.Code != http.StatusOK || svc.userID != 5 || svc.deskID != 4 || !svc.updateInput.DescriptionSet || svc.updateInput.Description != nil || !svc.updateInput.AvatarImgURLSet || svc.updateInput.AvatarImgURL == nil || *svc.updateInput.AvatarImgURL != "new.jpg" {
 		t.Fatalf("status=%d input=%+v body=%s", rec.Code, svc.updateInput, rec.Body.String())
@@ -293,7 +293,7 @@ func TestDeskHandlerUpdateBranches(t *testing.T) {
 
 func TestDeskHandlerDeleteAndChangePinBranches(t *testing.T) {
 	svc := &coverageDeskService{}
-	h := NewDeskHandler(svc, "")
+	h := NewDeskHandler(svc, "", nil)
 	if rec := invokeWithUser(t, 0, http.HandlerFunc(h.Delete), http.MethodDelete, "/api/v1/desks/4", "", map[string]string{"deskID": "4"}); rec.Code != http.StatusUnauthorized {
 		t.Fatalf("delete unauthorized status=%d", rec.Code)
 	}
@@ -346,11 +346,11 @@ func TestDeskDTOAndResponseCoverage(t *testing.T) {
 
 	desk := domain.Desk{ID: 3, CreatorID: 5, Name: "Art", AvatarImgURL: stringPtr("cover.jpg")}
 	pins := []domain.Pin{{ID: 8, ImageURL: "pin.jpg", Name: "Beach"}}
-	resp := NewDeskHandler(&coverageDeskService{}, "https://cdn.example").response(desk, pins)
+	resp := NewDeskHandler(&coverageDeskService{}, "https://cdn.example", nil).response(desk, pins)
 	if resp.AvatarImgURL == nil || *resp.AvatarImgURL != "https://cdn.example/images/cover.jpg" || len(resp.Pins) != 1 || resp.Pins[0].ImageURL != "https://cdn.example/images/pin.jpg" {
 		t.Fatalf("unexpected response mapping: %+v", resp)
 	}
-	withoutURL := NewDeskHandler(&coverageDeskService{}, "").response(desk, nil)
+	withoutURL := NewDeskHandler(&coverageDeskService{}, "", nil).response(desk, nil)
 	if withoutURL.AvatarImgURL == nil || *withoutURL.AvatarImgURL != "cover.jpg" || withoutURL.Pins != nil {
 		t.Fatalf("unexpected no-base-url response: %+v", withoutURL)
 	}

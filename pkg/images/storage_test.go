@@ -5,7 +5,10 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/google/uuid"
 )
 
 func TestStorageSaveAndDelete(t *testing.T) {
@@ -17,6 +20,9 @@ func TestStorageSaveAndDelete(t *testing.T) {
 	}
 	if filepath.Ext(name) != ".png" {
 		t.Fatalf("unexpected extension: %s", name)
+	}
+	if _, err := uuid.Parse(strings.TrimSuffix(name, ".png")); err != nil {
+		t.Fatalf("filename must contain a UUID: %q (%v)", name, err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
 		t.Fatal(err)

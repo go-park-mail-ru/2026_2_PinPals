@@ -1,15 +1,15 @@
 package http
 
+//go:generate go run go.uber.org/mock/mockgen@v0.6.0 -source=desk_handler.go -destination=mocks/mock_desk_service.go -package=mocks
+
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
-	"time"
+
+	"github.com/go-playground/validator/v10"
 
 	"2026_2_PinPals/pin_service/domain"
 	"2026_2_PinPals/pkg/httpx"
@@ -26,90 +26,26 @@ type DeskService interface {
 	AddPin(context.Context, int, int, int) error
 	RemovePin(context.Context, int, int, int) error
 }
+
 type DeskHandler struct {
-	service DeskService
-	baseURL string
+	service          DeskService
+	baseURL          string
+	requestValidator *validator.Validate
 }
 
-func NewDeskHandler(service DeskService, baseURL string) *DeskHandler {
-	return &DeskHandler{service: service, baseURL: baseURL}
-}
-
-type CreateDeskRequest struct {
-	Name         string  `json:"name"`
-	Description  *string `json:"description"`
-	EntryStatus  int16   `json:"entry_status"`
-	AvatarImgURL *string `json:"avatar_img_url"`
-}
-
-func (r CreateDeskRequest) ToDomain() domain.CreateDeskInput {
-	return domain.CreateDeskInput{Name: r.Name, Description: r.Description, EntryStatus: r.EntryStatus, AvatarImgURL: r.AvatarImgURL}
-}
-
-type UpdateDeskRequest struct {
-	Name         *string         `json:"name"`
-	Description  json.RawMessage `json:"description"`
-	EntryStatus  *int16          `json:"entry_status"`
-	AvatarImgURL json.RawMessage `json:"avatar_img_url"`
-}
-
-func (r UpdateDeskRequest) ToDomain() (domain.UpdateDeskInput, error) {
-	input := domain.UpdateDeskInput{Name: r.Name, EntryStatus: r.EntryStatus}
-	if len(r.Description) > 0 {
-		input.DescriptionSet = true
-		v, err := decodeNullableString(r.Description)
-		if err != nil {
-			return input, err
-		}
-		input.Description = v
+func NewDeskHandler(service DeskService, baseURL string, requestValidator *validator.Validate) *DeskHandler {
+	if requestValidator == nil {
+		requestValidator = validator.New()
 	}
-	if len(r.AvatarImgURL) > 0 {
-		input.AvatarImgURLSet = true
-		v, err := decodeNullableString(r.AvatarImgURL)
-		if err != nil {
-			return input, err
-		}
-		input.AvatarImgURL = v
+	return &DeskHandler{
+		service:          service,
+		baseURL:          baseURL,
+		requestValidator: requestValidator,
 	}
-	return input, nil
 }
 
-func decodeNullableString(raw json.RawMessage) (*string, error) {
-	raw = bytes.TrimSpace(raw)
-	if bytes.Equal(raw, []byte("null")) {
-		return nil, nil
-	}
-	var value string
-	if err := json.Unmarshal(raw, &value); err != nil {
-		return nil, err
-	}
-	return &value, nil
-}
-
-type DeskResponse struct {
-	ID           int           `json:"desk_id"`
-	CreatorID    int           `json:"creator_id"`
-	Name         string        `json:"name"`
-	Description  *string       `json:"description,omitempty"`
-	AvatarImgURL *string       `json:"avatar_img_url,omitempty"`
-	EntryStatus  int16         `json:"entry_status"`
-	CreatedAt    time.Time     `json:"created_at"`
-	Pins         []PinResponse `json:"pins,omitempty"`
-}
-
-func (h *DeskHandler) response(d domain.Desk, pins []domain.Pin) DeskResponse {
-	r := DeskResponse{ID: d.ID, CreatorID: d.CreatorID, Name: d.Name, Description: d.Description, AvatarImgURL: d.AvatarImgURL, EntryStatus: d.EntryStatus, CreatedAt: d.CreatedAt}
-	if r.AvatarImgURL != nil && h.baseURL != "" {
-		v := h.baseURL + "/images/" + url.PathEscape(*r.AvatarImgURL)
-		r.AvatarImgURL = &v
-	}
-	if pins != nil {
-		r.Pins = make([]PinResponse, len(pins))
-		for i, p := range pins {
-			r.Pins[i] = PinResponseFromDomain(p, h.baseURL)
-		}
-	}
-	return r
+func (h *DeskHandler) response(desk domain.Desk, pins []domain.Pin) DeskResponse {
+	return DeskResponseFromDomain(desk, pins, h.baseURL)
 }
 
 // Create godoc
@@ -122,16 +58,22 @@ func (h *DeskHandler) response(d domain.Desk, pins []domain.Pin) DeskResponse {
 // @Security CookieAuth
 // @Router /desks [post]
 func (h *DeskHandler) Create(w http.ResponseWriter, r *http.Request) {
-	uid, ok := middleware.UserIDFromContext(r.Context())
+	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
-		httpx.WriteError(w, 401, "unauthorized")
+		httpx.WriteError(w, http.StatusUnauthorized, "Не авторизован")
 		return
 	}
-	var req CreateDeskRequest
-	if err := httpx.DecodeJSON(w, r, &req); err != nil {
+
+	var request CreateDeskRequest
+	if err := httpx.DecodeJSON(w, r, &request); err != nil {
 		return
 	}
-	desk, err := h.service.Create(r.Context(), uid, req.ToDomain())
+	if err := h.requestValidator.Struct(request); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "Некорректные данные доски")
+		return
+	}
+
+	desk, err := h.service.Create(r.Context(), userID, request.ToDomain())
 	if err != nil {
 		h.writeError(w, r, err)
 		return
@@ -147,12 +89,13 @@ func (h *DeskHandler) Create(w http.ResponseWriter, r *http.Request) {
 // @Security CookieAuth
 // @Router /desks/me [get]
 func (h *DeskHandler) ListOwn(w http.ResponseWriter, r *http.Request) {
-	uid, ok := middleware.UserIDFromContext(r.Context())
+	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
-		httpx.WriteError(w, 401, "unauthorized")
+		httpx.WriteError(w, http.StatusUnauthorized, "Не авторизован")
 		return
 	}
-	desks, err := h.service.ListOwn(r.Context(), uid)
+
+	desks, err := h.service.ListOwn(r.Context(), userID)
 	if err != nil {
 		h.writeError(w, r, err)
 		return
@@ -169,10 +112,11 @@ func (h *DeskHandler) ListOwn(w http.ResponseWriter, r *http.Request) {
 // @Router /users/{userID}/desks [get]
 func (h *DeskHandler) ListPublic(w http.ResponseWriter, r *http.Request) {
 	ownerID, err := strconv.Atoi(r.PathValue("userID"))
-	if err != nil {
-		httpx.WriteError(w, 400, "invalid user id")
+	if err != nil || ownerID < 1 {
+		httpx.WriteError(w, http.StatusBadRequest, "Некорректный идентификатор пользователя")
 		return
 	}
+
 	desks, err := h.service.ListPublic(r.Context(), ownerID, 100)
 	if err != nil {
 		h.writeError(w, r, err)
@@ -192,17 +136,18 @@ func (h *DeskHandler) ListPublic(w http.ResponseWriter, r *http.Request) {
 // @Router /desks/{deskID} [get]
 func (h *DeskHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	deskID, err := strconv.Atoi(r.PathValue("deskID"))
-	if err != nil {
-		httpx.WriteError(w, 400, "invalid desk id")
+	if err != nil || deskID < 1 {
+		httpx.WriteError(w, http.StatusBadRequest, "Некорректный идентификатор доски")
 		return
 	}
-	uid, _ := middleware.UserIDFromContext(r.Context())
-	result, err := h.service.GetWithPins(r.Context(), uid, deskID)
+	userID, _ := middleware.UserIDFromContext(r.Context())
+
+	result, err := h.service.GetWithPins(r.Context(), userID, deskID)
 	if err != nil {
 		h.writeError(w, r, err)
 		return
 	}
-	httpx.WriteJSON(w, 200, h.response(result.Desk, result.Pins))
+	httpx.WriteJSON(w, http.StatusOK, h.response(result.Desk, result.Pins))
 }
 
 // Update godoc
@@ -216,31 +161,37 @@ func (h *DeskHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 // @Security CookieAuth
 // @Router /desks/{deskID} [patch]
 func (h *DeskHandler) Update(w http.ResponseWriter, r *http.Request) {
-	uid, ok := middleware.UserIDFromContext(r.Context())
+	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
-		httpx.WriteError(w, 401, "unauthorized")
+		httpx.WriteError(w, http.StatusUnauthorized, "Не авторизован")
 		return
 	}
 	deskID, err := strconv.Atoi(r.PathValue("deskID"))
+	if err != nil || deskID < 1 {
+		httpx.WriteError(w, http.StatusBadRequest, "Некорректный идентификатор доски")
+		return
+	}
+
+	var request UpdateDeskRequest
+	if err := httpx.DecodeJSON(w, r, &request); err != nil {
+		return
+	}
+	if err := request.Validate(h.requestValidator); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "Некорректные данные доски")
+		return
+	}
+	input, err := request.ToDomain()
 	if err != nil {
-		httpx.WriteError(w, 400, "invalid desk id")
+		httpx.WriteError(w, http.StatusBadRequest, "Некорректные данные доски")
 		return
 	}
-	var req UpdateDeskRequest
-	if err := httpx.DecodeJSON(w, r, &req); err != nil {
-		return
-	}
-	input, err := req.ToDomain()
-	if err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid desk data")
-		return
-	}
-	desk, err := h.service.Update(r.Context(), uid, deskID, input)
+
+	desk, err := h.service.Update(r.Context(), userID, deskID, input)
 	if err != nil {
 		h.writeError(w, r, err)
 		return
 	}
-	httpx.WriteJSON(w, 200, h.response(desk, nil))
+	httpx.WriteJSON(w, http.StatusOK, h.response(desk, nil))
 }
 
 // Delete godoc
@@ -251,17 +202,18 @@ func (h *DeskHandler) Update(w http.ResponseWriter, r *http.Request) {
 // @Security CookieAuth
 // @Router /desks/{deskID} [delete]
 func (h *DeskHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	uid, ok := middleware.UserIDFromContext(r.Context())
+	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
-		httpx.WriteError(w, 401, "unauthorized")
+		httpx.WriteError(w, http.StatusUnauthorized, "Не авторизован")
 		return
 	}
 	deskID, err := strconv.Atoi(r.PathValue("deskID"))
-	if err != nil {
-		httpx.WriteError(w, 400, "invalid desk id")
+	if err != nil || deskID < 1 {
+		httpx.WriteError(w, http.StatusBadRequest, "Некорректный идентификатор доски")
 		return
 	}
-	if err := h.service.Delete(r.Context(), uid, deskID); err != nil {
+
+	if err := h.service.Delete(r.Context(), userID, deskID); err != nil {
 		h.writeError(w, r, err)
 		return
 	}
@@ -276,7 +228,9 @@ func (h *DeskHandler) Delete(w http.ResponseWriter, r *http.Request) {
 // @Success 204
 // @Security CookieAuth
 // @Router /desks/{deskID}/pins/{pinID} [post]
-func (h *DeskHandler) AddPin(w http.ResponseWriter, r *http.Request) { h.changePin(w, r, true) }
+func (h *DeskHandler) AddPin(w http.ResponseWriter, r *http.Request) {
+	h.changePin(w, r, true)
+}
 
 // RemovePin godoc
 // @Summary Удалить пин с доски
@@ -286,24 +240,28 @@ func (h *DeskHandler) AddPin(w http.ResponseWriter, r *http.Request) { h.changeP
 // @Success 204
 // @Security CookieAuth
 // @Router /desks/{deskID}/pins/{pinID} [delete]
-func (h *DeskHandler) RemovePin(w http.ResponseWriter, r *http.Request) { h.changePin(w, r, false) }
+func (h *DeskHandler) RemovePin(w http.ResponseWriter, r *http.Request) {
+	h.changePin(w, r, false)
+}
+
 func (h *DeskHandler) changePin(w http.ResponseWriter, r *http.Request, add bool) {
-	uid, ok := middleware.UserIDFromContext(r.Context())
+	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
-		httpx.WriteError(w, 401, "unauthorized")
+		httpx.WriteError(w, http.StatusUnauthorized, "Не авторизован")
 		return
 	}
-	deskID, e1 := strconv.Atoi(r.PathValue("deskID"))
-	pinID, e2 := strconv.Atoi(r.PathValue("pinID"))
-	if e1 != nil || e2 != nil {
-		httpx.WriteError(w, 400, "invalid ids")
+	deskID, deskErr := strconv.Atoi(r.PathValue("deskID"))
+	pinID, pinErr := strconv.Atoi(r.PathValue("pinID"))
+	if deskErr != nil || pinErr != nil || deskID < 1 || pinID < 1 {
+		httpx.WriteError(w, http.StatusBadRequest, "Некорректные идентификаторы доски и пина")
 		return
 	}
+
 	var err error
 	if add {
-		err = h.service.AddPin(r.Context(), uid, deskID, pinID)
+		err = h.service.AddPin(r.Context(), userID, deskID, pinID)
 	} else {
-		err = h.service.RemovePin(r.Context(), uid, deskID, pinID)
+		err = h.service.RemovePin(r.Context(), userID, deskID, pinID)
 	}
 	if err != nil {
 		h.writeError(w, r, err)
@@ -311,25 +269,27 @@ func (h *DeskHandler) changePin(w http.ResponseWriter, r *http.Request, add bool
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
 func (h *DeskHandler) writeDesks(w http.ResponseWriter, desks []domain.Desk) {
 	out := make([]DeskResponse, len(desks))
-	for i, d := range desks {
-		out[i] = h.response(d, nil)
+	for i, desk := range desks {
+		out[i] = h.response(desk, nil)
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"desks": out})
 }
+
 func (h *DeskHandler) writeError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, domain.ErrValidation):
-		httpx.WriteError(w, 400, "invalid desk data")
+		httpx.WriteError(w, http.StatusBadRequest, "Некорректные данные доски")
 	case errors.Is(err, domain.ErrDeskNotFound):
-		httpx.WriteError(w, 404, "desk not found")
+		httpx.WriteError(w, http.StatusNotFound, "Доска не найдена")
 	case errors.Is(err, domain.ErrDeskForbidden):
-		httpx.WriteError(w, 403, "desk access denied")
+		httpx.WriteError(w, http.StatusForbidden, "Нет доступа к доске")
 	case errors.Is(err, domain.ErrPinNotFound):
-		httpx.WriteError(w, 404, "pin not found")
+		httpx.WriteError(w, http.StatusNotFound, "Пин не найден")
 	default:
 		middleware.LoggerFromContext(r.Context()).ErrorContext(r.Context(), "desk request failed", "error", err, "path", strings.TrimSpace(r.URL.Path))
-		httpx.WriteError(w, 500, "desk request failed")
+		httpx.WriteError(w, http.StatusInternalServerError, "Не удалось выполнить запрос к доске")
 	}
 }

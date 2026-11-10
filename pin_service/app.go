@@ -60,7 +60,7 @@ func RegisterRoutes(cfg *config.Config, logger *slog.Logger, pool *pgxpool.Pool,
 		middleware.CSRF(middleware.Access(tokenManager)(http.HandlerFunc(pinHandler.Create))),
 	)
 	deskService := usecase.NewDeskService(pinRepository)
-	deskHandler := httphandler.NewDeskHandler(deskService, cfg.App.BaseURL)
+	deskHandler := httphandler.NewDeskHandler(deskService, cfg.App.BaseURL, requestValidator)
 	mux.Handle("POST /api/v1/desks", middleware.CSRF(middleware.Access(tokenManager)(http.HandlerFunc(deskHandler.Create))))
 	mux.Handle("GET /api/v1/desks/me", middleware.Access(tokenManager)(http.HandlerFunc(deskHandler.ListOwn)))
 	mux.HandleFunc("GET /api/v1/users/{userID}/desks", deskHandler.ListPublic)

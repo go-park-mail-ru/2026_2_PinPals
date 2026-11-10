@@ -39,7 +39,8 @@ down:
 	docker compose down
 
 generate-mocks:
-	go run go.uber.org/mock/mockgen@v0.6.0 -source=auth_service/usecase/service.go -destination=auth_service/usecase/mocks/mock_user_repository.go -package=mocks
+	go generate ./auth_service/...
+	go generate ./pin_service/...
 
 cover:
 	@go test -coverprofile=coverage.raw.out ./...

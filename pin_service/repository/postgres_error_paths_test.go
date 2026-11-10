@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"2026_2_PinPals/pin_service/domain"
 
@@ -283,4 +284,17 @@ func TestRepositoryDeskDatabaseErrors(t *testing.T) {
 		}
 		assertMockExpectations(t, mock)
 	})
+}
+
+func assertMockExpectations(t *testing.T, mock pgxmock.PgxPoolIface) {
+	t.Helper()
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
+func pinRows(id, creatorID int, imageURL, name string) *pgxmock.Rows {
+	return pgxmock.NewRows([]string{
+		"pin_id", "creator_id", "image_url", "name", "description", "created_at",
+	}).AddRow(id, creatorID, imageURL, name, nil, time.Now())
 }

@@ -12,10 +12,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// poolDB is the subset of pgxpool.Pool used by Repository. Keeping the
-// dependency behind this interface lets repository tests exercise SQL and
-// error mapping with pgxmock without a live PostgreSQL server.
-type poolDB interface {
+// database is the pgx surface used by Repository. The production constructor
+// still accepts *pgxpool.Pool, while tests inject pgxmock without a live server.
+type database interface {
 	Begin(context.Context) (pgx.Tx, error)
 	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
 	Query(context.Context, string, ...any) (pgx.Rows, error)
@@ -23,7 +22,7 @@ type poolDB interface {
 }
 
 type Repository struct {
-	pool poolDB
+	pool database
 }
 
 func NewRepository(pool *pgxpool.Pool) *Repository {

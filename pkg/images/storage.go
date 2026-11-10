@@ -1,14 +1,14 @@
 package images
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/google/uuid"
 )
 
 const MaxUploadSize int64 = 10 << 20 // 10 MiB
@@ -71,11 +71,11 @@ func (s *Storage) Save(source io.Reader) (string, error) {
 		return "", err
 	}
 
-	var id [16]byte
-	if _, err := rand.Read(id[:]); err != nil {
-		return "", fmt.Errorf("generate image name: %w", err)
+	id, err := uuid.NewRandom()
+	if err != nil {
+		return "", fmt.Errorf("generate image UUID: %w", err)
 	}
-	filename := hex.EncodeToString(id[:]) + ext
+	filename := id.String() + ext
 	if err := os.Rename(tmpName, filepath.Join(s.rootDir, filename)); err != nil {
 		return "", fmt.Errorf("store image: %w", err)
 	}
