@@ -4,6 +4,8 @@ import (
 	"log/slog"
 	"net/http"
 	"time"
+
+	"2026_2_PinPals/pkg/middleware"
 )
 
 func New(addr string, handler http.Handler) *http.Server {
@@ -20,8 +22,12 @@ func New(addr string, handler http.Handler) *http.Server {
 func RequestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			logger.Info("http request", "method", r.Method, "path", r.URL.Path)
-			next.ServeHTTP(w, r)
+			requestLogger := logger
+			if requestLogger == nil {
+				requestLogger = slog.Default()
+			}
+			requestLogger.InfoContext(r.Context(), "http request", "method", r.Method, "path", r.URL.Path)
+			next.ServeHTTP(w, r.WithContext(middleware.ContextWithLogger(r.Context(), requestLogger)))
 		})
 	}
 }
