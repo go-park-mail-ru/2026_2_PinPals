@@ -41,7 +41,6 @@ func TestRegisterRoutes(t *testing.T) {
 		{http.MethodDelete, "/api/v1/pins/8/like", "DELETE /api/v1/pins/{pinID}/like"},
 		{http.MethodGet, "/api/v1/pins/8/likes", "GET /api/v1/pins/{pinID}/likes"},
 		{http.MethodGet, "/images/photo.jpg", "GET /images/{filename}"},
-		{http.MethodGet, "/swagger/", "GET /swagger/"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.pattern, func(t *testing.T) {

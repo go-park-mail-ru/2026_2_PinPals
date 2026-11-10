@@ -30,6 +30,11 @@ type fakePinRepository struct {
 
 	getResult domain.Pin
 	getErr    error
+
+	updateResult domain.Pin
+	updateErr    error
+
+	deleteErr error
 }
 
 func (f *fakePinRepository) Create(
@@ -71,6 +76,26 @@ func (f *fakePinRepository) GetByID(
 	}
 
 	return f.getResult, nil
+}
+
+func (f *fakePinRepository) Update(
+    _ context.Context,
+    _ int,
+    _ domain.UpdatePinInput,
+    _ bool,
+) (domain.Pin, error) {
+    if f.updateErr != nil {
+        return domain.Pin{}, f.updateErr
+    }
+
+    return f.updateResult, nil
+}
+
+func (f *fakePinRepository) Delete(
+    _ context.Context,
+    _ int,
+) error {
+    return f.deleteErr
 }
 
 // Создаёт Handler для тестов с тестовым валидатором и временным хранилищем.
@@ -362,6 +387,7 @@ func TestListHandlerWithCursor(t *testing.T) {
 type failingImageStorage struct{}
 
 func (failingImageStorage) Save(io.Reader) (string, error) { return "", errors.New("disk unavailable") }
+
 func (failingImageStorage) Delete(string) error            { return nil }
 
 func TestCreateHandlerMapsImageStorageFailureToInternalServerError(t *testing.T) {

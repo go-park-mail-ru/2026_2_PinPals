@@ -11,12 +11,9 @@ import (
 	httphandler "2026_2_PinPals/auth_service/delivery/http"
 	"2026_2_PinPals/auth_service/repository"
 	"2026_2_PinPals/auth_service/usecase"
-	_ "2026_2_PinPals/docs/auth"
 	"2026_2_PinPals/pkg/config"
 	"2026_2_PinPals/pkg/middleware"
 	"2026_2_PinPals/pkg/server"
-
-	httpSwagger "github.com/swaggo/http-swagger/v2"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -48,12 +45,11 @@ func RegisterRoutes(cfg *config.Config, logger *slog.Logger, pool *pgxpool.Pool,
 
 	authRepository := repository.NewRepository(pool)
 	authService := usecase.NewService(authRepository)
-	authHandler := httphandler.NewHandler(authService, tokenManager.Issue, httphandler.HandlerOptions{TokenRevoker: tokenManager, TokenTTL: cfg.Auth.TokenTTL, SecureCookies: strings.HasPrefix(cfg.App.BaseURL, "https://"),BaseURL:cfg.App.BaseURL})
+	authHandler := httphandler.NewHandler(authService, tokenManager.Issue, httphandler.HandlerOptions{TokenRevoker: tokenManager, TokenTTL: cfg.Auth.TokenTTL, SecureCookies: strings.HasPrefix(cfg.App.BaseURL, "https://"), BaseURL: cfg.App.BaseURL})
 
 	mux.HandleFunc("POST /api/v1/auth/register", authHandler.Register)
 	mux.HandleFunc("POST /api/v1/auth/login", authHandler.Login)
 	mux.Handle("POST /api/v1/auth/logout", middleware.CSRF(middleware.Access(tokenManager)(http.HandlerFunc(authHandler.Logout))))
-	mux.Handle("GET /swagger/", httpSwagger.Handler(httpSwagger.URL("/swagger/doc.json")))
 }
 
 func Run(ctx context.Context) error {

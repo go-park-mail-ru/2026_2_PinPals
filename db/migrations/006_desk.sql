@@ -13,7 +13,7 @@ CREATE TABLE desk (
 
 COMMENT ON TABLE  desk                IS 'Доски — коллекции пинов пользователя';
 COMMENT ON COLUMN desk.name           IS 'Имя доски';
-COMMENT ON COLUMN desk.avatar_img_url IS 'Ссылка на обложку в MinIO';
+COMMENT ON COLUMN desk.avatar_img_url IS 'Имя файла обложки в общем локальном хранилище изображений';
 COMMENT ON COLUMN desk.entry_status   IS '0 — открытая, 1 — только для подписчиков, 2 — только для автора';
 COMMENT ON COLUMN desk.deleted_at     IS 'Момент soft delete; Если NULL, то запись активна';
 

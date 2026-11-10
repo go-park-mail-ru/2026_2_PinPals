@@ -34,6 +34,20 @@ type PinService interface {
 		ctx context.Context,
 		id int,
 	) (domain.Pin, error)
+
+	Update(
+		ctx context.Context,
+		userID int,
+		pinID int,
+		input domain.UpdatePinInput,
+		descriptionSet bool,
+	) (domain.Pin, error)
+
+	Delete(
+		ctx context.Context,
+		userID int,
+		pinID int,
+	) (domain.Pin, error)
 }
 
 type Handler struct {
@@ -255,4 +269,173 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusCreated, PinResponseFromDomain(pin, h.baseURL))
+}
+
+// Update godoc
+// @Summary Изменить название и описание своего пина
+// @Tags Pins
+// @Accept json
+// @Produce json
+// @Param pinID path int true "Идентификатор пина"
+// @Param request body UpdatePinRequest true "Изменения пина"
+// @Success 200 {object} PinResponse
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Security CookieAuth
+// @Router /pins/{pinID} [patch]
+func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		httpx.WriteError(
+			w,
+			http.StatusUnauthorized,
+			"unauthorized",
+		)
+		return
+	}
+
+	pinID, err := strconv.Atoi(r.PathValue("pinID"))
+	if err != nil || pinID < 1 {
+		httpx.WriteError(
+			w,
+			http.StatusBadRequest,
+			"invalid pin id",
+		)
+		return
+	}
+
+	var req UpdatePinRequest
+
+	if err := httpx.DecodeJSON(w, r, &req); err != nil {
+		return
+	}
+
+	input, descriptionSet, err := req.ToDomain()
+	if err != nil {
+		h.writePinMutationError(w, r, err, "update pin")
+		return
+	}
+
+	pin, err := h.service.Update(
+		r.Context(),
+		userID,
+		pinID,
+		input,
+		descriptionSet,
+	)
+
+	if err != nil {
+		h.writePinMutationError(w, r, err, "update pin")
+		return
+	}
+
+	httpx.WriteJSON(
+		w,
+		http.StatusOK,
+		PinResponseFromDomain(pin, h.baseURL),
+	)
+}
+
+// Delete godoc
+// @Summary Удалить свой пин
+// @Tags Pins
+// @Param pinID path int true "Идентификатор пина"
+// @Success 204
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Security CookieAuth
+// @Router /pins/{pinID} [delete]
+func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		httpx.WriteError(
+			w,
+			http.StatusUnauthorized,
+			"unauthorized",
+		)
+		return
+	}
+
+	pinID, err := strconv.Atoi(r.PathValue("pinID"))
+	if err != nil || pinID < 1 {
+		httpx.WriteError(
+			w,
+			http.StatusBadRequest,
+			"invalid pin id",
+		)
+		return
+	}
+
+	pin, err := h.service.Delete(
+		r.Context(),
+		userID,
+		pinID,
+	)
+
+	if err != nil {
+		h.writePinMutationError(w, r, err, "delete pin")
+		return
+	}
+
+	if h.imageStorage != nil && images.IsStoredFilename(pin.ImageURL) {
+		if err := h.imageStorage.Delete(pin.ImageURL); err != nil {
+			middleware.LoggerFromContext(r.Context()).ErrorContext(
+				r.Context(),
+				"failed to delete pin image",
+				"pin_id", pinID,
+				"filename", pin.ImageURL,
+				"error", err,
+			)
+		}
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) writePinMutationError(
+	w http.ResponseWriter,
+	r *http.Request,
+	err error,
+	operation string,
+) {
+	switch {
+	case errors.Is(err, domain.ErrValidation):
+		httpx.WriteError(
+			w,
+			http.StatusBadRequest,
+			"invalid pin data",
+		)
+
+	case errors.Is(err, domain.ErrPinNotFound):
+		httpx.WriteError(
+			w,
+			http.StatusNotFound,
+			"pin not found",
+		)
+
+	case errors.Is(err, domain.ErrPinForbidden):
+		httpx.WriteError(
+			w,
+			http.StatusForbidden,
+			"you are not allowed to modify this pin",
+		)
+
+	default:
+		middleware.LoggerFromContext(r.Context()).ErrorContext(
+			r.Context(),
+			"failed to "+operation,
+			"pin_id", r.PathValue("pinID"),
+			"error", err,
+		)
+
+		httpx.WriteError(
+			w,
+			http.StatusInternalServerError,
+			"failed to "+operation,
+		)
+	}
 }

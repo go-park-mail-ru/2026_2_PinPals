@@ -1,37 +1,37 @@
 package images
 
 import (
-    "net/url"
-    "strings"
+	"net/url"
+	"strings"
 )
 
 func PublicURL(baseURL, value string) string {
-    if value == "" {
-        return ""
-    }
+	if value == "" {
+		return ""
+	}
 
-    parsed, err := url.Parse(value)
+	parsed, err := url.Parse(value)
 
-    if err == nil && parsed.IsAbs() {
-        return value
-    }
+	if err == nil && parsed.IsAbs() {
+		return value
+	}
 
-    baseURL = strings.TrimRight(baseURL, "/")
+	baseURL = strings.TrimRight(baseURL, "/")
 
-    // Если в БД уже был относительный путь /images/...
-    if strings.HasPrefix(value, "/images/") {
-        if baseURL == "" {
-            return value
-        }
+	// Если в БД уже был относительный путь /images/...
+	if strings.HasPrefix(value, "/images/") {
+		if baseURL == "" {
+			return value
+		}
 
-        return baseURL + value
-    }
+		return baseURL + value
+	}
 
-    imagePath := "/images/" + url.PathEscape(value)
+	imagePath := "/images/" + url.PathEscape(value)
 
-    if baseURL == "" {
-        return imagePath
-    }
+	if baseURL == "" {
+		return imagePath
+	}
 
-    return baseURL + imagePath
+	return baseURL + imagePath
 }

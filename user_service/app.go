@@ -8,17 +8,15 @@ import (
 	"strings"
 	"time"
 
-	_ "2026_2_PinPals/docs/user"
 	"2026_2_PinPals/pkg/config"
+	"2026_2_PinPals/pkg/images"
 	"2026_2_PinPals/pkg/middleware"
 	"2026_2_PinPals/pkg/server"
-	"2026_2_PinPals/pkg/images"
 
 	httphandler "2026_2_PinPals/user_service/delivery/http"
 	"2026_2_PinPals/user_service/repository"
 	"2026_2_PinPals/user_service/usecase"
 	"github.com/jackc/pgx/v5/pgxpool"
-	httpSwagger "github.com/swaggo/http-swagger/v2"
 )
 
 func SetupPostgres(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*pgxpool.Pool, error) {
@@ -46,14 +44,13 @@ func RegisterRoutes(cfg *config.Config, logger *slog.Logger, pool *pgxpool.Pool,
 		TokenRevoker:  tokens,
 		SecureCookies: strings.HasPrefix(cfg.App.BaseURL, "https://"),
 
-		BaseURL:     cfg.App.BaseURL,
+		BaseURL:      cfg.App.BaseURL,
 		ImageStorage: images.NewStorage(cfg.App.ImageDir),
 	})
 	access := middleware.Access(tokens)
 	mux.Handle("GET /api/v1/users/me", access(http.HandlerFunc(handler.GetMe)))
 	mux.Handle("PATCH /api/v1/users/me", middleware.CSRF(access(http.HandlerFunc(handler.UpdateMe))))
 	mux.Handle("DELETE /api/v1/users/me", middleware.CSRF(access(http.HandlerFunc(handler.DeleteMe))))
-	mux.Handle("GET /swagger/", httpSwagger.Handler(httpSwagger.URL("/swagger/doc.json")))
 }
 
 func Run(ctx context.Context) error { return server.Run(ctx, SetupPostgres, RegisterRoutes) }

@@ -19,6 +19,11 @@ type fakePinRepository struct {
 
 	getResult domain.Pin
 	getErr    error
+
+	updateResult domain.Pin
+	updateErr    error
+
+	deleteErr error
 }
 
 func (f *fakePinRepository) Create(
@@ -60,6 +65,26 @@ func (f *fakePinRepository) GetByID(
 	}
 
 	return f.getResult, nil
+}
+
+func (f *fakePinRepository) Update(
+    _ context.Context,
+    _ int,
+    _ domain.UpdatePinInput,
+    _ bool,
+) (domain.Pin, error) {
+    if f.updateErr != nil {
+        return domain.Pin{}, f.updateErr
+    }
+
+    return f.updateResult, nil
+}
+
+func (f *fakePinRepository) Delete(
+    _ context.Context,
+    _ int,
+) error {
+    return f.deleteErr
 }
 
 func TestCreatePin(t *testing.T) {

@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"strings"
+	"unicode/utf8"
 
 	"2026_2_PinPals/user_service/domain"
 )
@@ -30,20 +31,23 @@ func (s *Service) UpdateProfile(ctx context.Context, userID int, input domain.Up
 	}
 	if input.Name != nil {
 		value := strings.TrimSpace(*input.Name)
-		if value == "" || len(value) > 255 {
+		if value == "" || utf8.RuneCountInString(value) > 255 {
 			return nil, domain.ErrValidation
 		}
 		input.Name = &value
 	}
 	if input.UserTag != nil {
 		value := strings.TrimSpace(*input.UserTag)
-		if value == "" || len(value) > 64 {
+		if value == "" || utf8.RuneCountInString(value) > 64 {
 			return nil, domain.ErrValidation
 		}
 		input.UserTag = &value
 	}
 	if input.Description != nil {
 		value := strings.TrimSpace(*input.Description)
+		if utf8.RuneCountInString(value) > 5000 {
+			return nil, domain.ErrValidation
+		}
 		input.Description = &value
 	}
 	if input.AvatarURL != nil {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 
 	"2026_2_PinPals/pin_service/domain"
 )
@@ -46,6 +47,18 @@ type PinRepository interface {
 		ctx context.Context,
 		id int,
 	) (domain.Pin, error)
+
+	Update(
+		ctx context.Context,
+		pinID int,
+		input domain.UpdatePinInput,
+		descriptionSet bool,
+	) (domain.Pin, error)
+
+	Delete(
+		ctx context.Context,
+		pinID int,
+	) error
 }
 
 type Service struct {
@@ -106,4 +119,85 @@ func (s *Service) GetByID(ctx context.Context, id int) (domain.Pin, error) {
 		return domain.Pin{}, domain.ErrValidation
 	}
 	return s.repository.GetByID(ctx, id)
+}
+
+
+
+func (s *Service) Update(
+    ctx context.Context,
+    userID int,
+    pinID int,
+    input domain.UpdatePinInput,
+    descriptionSet bool,
+) (domain.Pin, error) {
+
+    if userID < 1 || pinID < 1 {
+        return domain.Pin{}, domain.ErrValidation
+    }
+
+    if input.Name == nil && !descriptionSet {
+        return domain.Pin{}, domain.ErrValidation
+    }
+
+    if input.Name != nil {
+        name := strings.TrimSpace(*input.Name)
+
+        if name == "" || utf8.RuneCountInString(name) > 255 {
+            return domain.Pin{}, domain.ErrValidation
+        }
+
+        input.Name = &name
+    }
+
+    if descriptionSet && input.Description != nil {
+        description := strings.TrimSpace(*input.Description)
+
+        if utf8.RuneCountInString(description) > 2000 {
+            return domain.Pin{}, domain.ErrValidation
+        }
+
+        input.Description = &description
+    }
+
+    current, err := s.repository.GetByID(ctx, pinID)
+    if err != nil {
+        return domain.Pin{}, err
+    }
+
+    if current.CreatorID != userID {
+        return domain.Pin{}, domain.ErrPinForbidden
+    }
+
+    return s.repository.Update(
+        ctx,
+        pinID,
+        input,
+        descriptionSet,
+    )
+}
+
+func (s *Service) Delete(
+    ctx context.Context,
+    userID int,
+    pinID int,
+) (domain.Pin, error) {
+
+    if userID < 1 || pinID < 1 {
+        return domain.Pin{}, domain.ErrValidation
+    }
+
+    current, err := s.repository.GetByID(ctx, pinID)
+    if err != nil {
+        return domain.Pin{}, err
+    }
+
+    if current.CreatorID != userID {
+        return domain.Pin{}, domain.ErrPinForbidden
+    }
+
+    if err := s.repository.Delete(ctx, pinID); err != nil {
+        return domain.Pin{}, err
+    }
+
+    return current, nil
 }

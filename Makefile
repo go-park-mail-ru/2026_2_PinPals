@@ -9,7 +9,7 @@ help:
 	@echo "  make run            - start application with docker compose"
 	@echo "  make tests          - run tests"
 	@echo "  make cover          - show coverage, excluding generated mocks; fail at <= 60%"
-	@echo "  make generate-mocks - regenerate gomock mocks"
+	@echo "  make generate-mocks - regenerate repository and HTTP-handler gomock mocks"
 	@echo "  make swagger        - regenerate OpenAPI docs (run after all three branches are merged)"
 	@echo "  make fmt            - format Go code"
 	@echo "  make down           - stop docker compose"
@@ -40,6 +40,13 @@ down:
 
 generate-mocks:
 	go run go.uber.org/mock/mockgen@v0.6.0 -source=auth_service/usecase/service.go -destination=auth_service/usecase/mocks/mock_user_repository.go -package=mocks
+	go run go.uber.org/mock/mockgen@v0.6.0 -source=pin_service/usecase/desk_service.go -destination=pin_service/usecase/mocks/mock_desk_repository.go -package=mocks
+	go run go.uber.org/mock/mockgen@v0.6.0 -source=pin_service/usecase/like_service.go -destination=pin_service/usecase/mocks/mock_like_repository.go -package=mocks
+	go run go.uber.org/mock/mockgen@v0.6.0 -source=user_service/usecase/service.go -destination=user_service/usecase/mocks/mock_user_repository.go -package=mocks
+	go run go.uber.org/mock/mockgen@v0.6.0 -destination=auth_service/delivery/http/mocks/mock_token_revoker.go -package=mocks 2026_2_PinPals/auth_service/delivery/http TokenRevoker
+	go run go.uber.org/mock/mockgen@v0.6.0 -destination=pin_service/delivery/http/mocks/mock_desk_service.go -package=mocks 2026_2_PinPals/pin_service/delivery/http DeskService
+	go run go.uber.org/mock/mockgen@v0.6.0 -destination=pin_service/delivery/http/mocks/mock_like_service.go -package=mocks 2026_2_PinPals/pin_service/delivery/http LikeService
+	go run go.uber.org/mock/mockgen@v0.6.0 -source=user_service/delivery/http/handler.go -destination=user_service/delivery/http/mocks/mock_user_interfaces.go -package=mocks
 
 cover:
 	@go test -coverprofile=coverage.raw.out ./...

@@ -1,7 +1,6 @@
 package images
 
 import (
-	"crypto/rand"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -9,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/google/uuid"
 )
 
 const MaxUploadSize int64 = 10 << 20 // 10 MiB
@@ -71,11 +72,11 @@ func (s *Storage) Save(source io.Reader) (string, error) {
 		return "", err
 	}
 
-	var id [16]byte
-	if _, err := rand.Read(id[:]); err != nil {
-		return "", fmt.Errorf("generate image name: %w", err)
+	id, err := uuid.NewRandom()
+	if err != nil {
+		return "", fmt.Errorf("generate image UUID: %w", err)
 	}
-	filename := hex.EncodeToString(id[:]) + ext
+	filename := id.String() + ext
 	if err := os.Rename(tmpName, filepath.Join(s.rootDir, filename)); err != nil {
 		return "", fmt.Errorf("store image: %w", err)
 	}
@@ -83,7 +84,10 @@ func (s *Storage) Save(source io.Reader) (string, error) {
 }
 
 func (s *Storage) Delete(filename string) error {
-	if !validImageFilename(filename) {
+	if s.rootDir == "" {
+		return errors.New("image directory is not configured")
+	}
+	if !IsStoredFilename(filename) {
 		return ErrInvalidImage
 	}
 	err := os.Remove(filepath.Join(s.rootDir, filename))
@@ -121,25 +125,20 @@ func validImageFilename(filename string) bool {
 }
 
 func IsStoredFilename(filename string) bool {
-    if !validImageFilename(filename) {
-        return false
-    }
+	if !validImageFilename(filename) {
+		return false
+	}
+	ext := strings.ToLower(filepath.Ext(filename))
+	if ext != ".jpg" && ext != ".png" && ext != ".gif" && ext != ".webp" {
+		return false
+	}
+	name := strings.TrimSuffix(filename, filepath.Ext(filename))
 
-    ext := strings.ToLower(filepath.Ext(filename))
-
-    switch ext {
-    case ".jpg", ".png", ".gif", ".webp":
-    default:
-        return false
-    }
-
-    name := strings.TrimSuffix(filename, filepath.Ext(filename))
-
-    if len(name) != 32 {
-        return false
-    }
-
-    _, err := hex.DecodeString(name)
-
-    return err == nil
+	// Backward compatibility for files written by earlier releases.
+	if len(name) == 32 {
+		_, err := hex.DecodeString(name)
+		return err == nil
+	}
+	id, err := uuid.Parse(name)
+	return err == nil && id.Version() == uuid.Version(4) && id.Variant() == uuid.RFC4122
 }
