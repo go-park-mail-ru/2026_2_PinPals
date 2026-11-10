@@ -15,13 +15,24 @@ import (
 
 const userTagConstraint = "user_user_tag_key"
 
+type queryRower interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}
+
 type Repository struct {
-	pool *pgxpool.Pool
+	pool queryRower
 }
 
 func NewRepository(pool *pgxpool.Pool) *Repository {
 	return &Repository{pool: pool}
 }
+
+const queryGetProfile = `
+	SELECT user_id, name, user_tag, birth_date, description, avatar_url, created_at
+	FROM "user"
+	WHERE user_id = $1
+	  AND deleted_at IS NULL
+`
 
 const queryDeleteProfile = `
 	UPDATE "user"
@@ -30,6 +41,30 @@ const queryDeleteProfile = `
 	  AND deleted_at IS NULL
 	RETURNING user_id
 `
+
+func (r *Repository) GetProfile(ctx context.Context, userID int) (*domain.User, error) {
+	user := &domain.User{}
+
+	err := r.pool.QueryRow(ctx, queryGetProfile, userID).Scan(
+		&user.ID,
+		&user.Name,
+		&user.UserTag,
+		&user.BirthDate,
+		&user.Description,
+		&user.AvatarURL,
+		&user.CreatedAt,
+	)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, domain.ErrUserNotFound
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return user, nil
+}
 
 func buildUpdateProfileQuery(
 	userID int,

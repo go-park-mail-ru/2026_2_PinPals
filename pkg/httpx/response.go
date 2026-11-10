@@ -17,7 +17,7 @@ func WriteError(w http.ResponseWriter, status int, message string) {
 
 func WriteValidationError(w http.ResponseWriter, status int, fields map[string]string) {
 	WriteJSON(w, status, map[string]any{
-		"error":  "validation_error",
+		"error":  "ошибка_валидации",
 		"fields": fields,
 	})
 }

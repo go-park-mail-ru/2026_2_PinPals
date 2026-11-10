@@ -32,6 +32,9 @@ services:
     env_file:
       - .env
 
+    volumes:
+      - ./db:/app/db:ro
+
     depends_on:
       postgres:
         condition: service_healthy
@@ -40,6 +43,16 @@ services:
 
     networks:
       - app-network
+
+
+  image_storage_init:
+    image: alpine:3.22
+    user: "0:0"
+    volumes:
+      - ./templates:/source:ro
+      - pin_images:/images
+    entrypoint: ["/bin/sh", "-c", "cp -an /source/. /images/ 2>/dev/null || true; chown -R 65534:65534 /images"]
+    restart: "no"
 
 
   auth_service:
@@ -85,17 +98,48 @@ services:
       - .env
 
     volumes:
-      - ./templates:/app/images
+      - pin_images:/app/images
 
     depends_on:
       postgres:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+      image_storage_init:
+        condition: service_completed_successfully
 
     networks:
       - app-network
 
+  user_service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - SERVICE=user_service
+
+    container_name: user_service
+    restart: unless-stopped
+
+    ports:
+      - "8003:8000"
+
+    env_file:
+      - .env
+
+    volumes:
+      - pin_images:/app/images
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      image_storage_init:
+        condition: service_completed_successfully
+
+    networks:
+      - app-network
 
 networks:
   app-network:
@@ -105,3 +149,4 @@ networks:
 volumes:
   postgres_data:
   minio_data:
+  pin_images:

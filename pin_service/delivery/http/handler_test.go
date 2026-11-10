@@ -6,17 +6,18 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"log/slog"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
+	"github.com/go-playground/validator/v10"
+
 	"2026_2_PinPals/pin_service/domain"
 	"2026_2_PinPals/pin_service/usecase"
+	"2026_2_PinPals/pkg/images"
 	"2026_2_PinPals/pkg/middleware"
-
-	"github.com/go-playground/validator/v10"
 )
 
 type fakePinRepository struct {
@@ -72,18 +73,33 @@ func (f *fakePinRepository) GetByID(
 	return f.getResult, nil
 }
 
-func pinsTestLogger() *slog.Logger {
-	return slog.New(slog.NewTextHandler(io.Discard, nil))
+// Создаёт Handler для тестов с тестовым валидатором и временным хранилищем.
+func newPinsTestHandler(t *testing.T, service PinService) *Handler {
+	t.Helper()
+	dir := t.TempDir()
+	return NewHandler(service, "", validator.New(), images.NewStorage(dir))
 }
 
-// Создаёт Handler для тестов с тестовым валидатором.
-func newPinsTestHandler(service PinService) *Handler {
-	return NewHandler(
-		service,
-		pinsTestLogger(),
-		"",
-		validator.New(),
-	)
+func newMultipartPinRequest(t *testing.T, name string) *http.Request {
+	t.Helper()
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	if err := writer.WriteField("name", name); err != nil {
+		t.Fatal(err)
+	}
+	part, err := writer.CreateFormFile("image", "upload.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := part.Write([]byte("\x89PNG\r\n\x1a\ncontent")); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/pins", &body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	return req
 }
 
 func TestListHandler(t *testing.T) {
@@ -140,7 +156,7 @@ func TestListHandler(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			service := usecase.NewService(tt.repo)
-			handler := newPinsTestHandler(service)
+			handler := newPinsTestHandler(t, service)
 
 			req := httptest.NewRequest(
 				http.MethodPost,
@@ -172,7 +188,7 @@ func TestListHandlerNextCursor(t *testing.T) {
 		listHasNext: true,
 	}
 
-	handler := newPinsTestHandler(usecase.NewService(repo))
+	handler := newPinsTestHandler(t, usecase.NewService(repo))
 
 	req := httptest.NewRequest(
 		http.MethodPost,
@@ -226,7 +242,7 @@ func TestGetByIDHandler(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := newPinsTestHandler(usecase.NewService(tt.repo))
+			handler := newPinsTestHandler(t, usecase.NewService(tt.repo))
 
 			req := httptest.NewRequest(
 				http.MethodGet,
@@ -254,23 +270,28 @@ func TestCreateHandler(t *testing.T) {
 		auth       bool
 		wantStatus int
 	}{
-		{"unauthorized", `{"image_url":"x.jpg","name":"Beach"}`, &fakePinRepository{}, false, http.StatusUnauthorized},
-		{"bad json", `{`, &fakePinRepository{}, true, http.StatusBadRequest},
-		{"validation", `{"image_url":"","name":"Beach"}`, &fakePinRepository{}, true, http.StatusBadRequest},
-		{"repository error", `{"image_url":"x.jpg","name":"Beach"}`, &fakePinRepository{createErr: errors.New("database error")}, true, http.StatusInternalServerError},
-		{"success", `{"image_url":"x.jpg","name":"Beach"}`, &fakePinRepository{}, true, http.StatusCreated},
+		{"unauthorized", "Beach", &fakePinRepository{}, false, http.StatusUnauthorized},
+		{"missing image", "Beach", &fakePinRepository{}, true, http.StatusBadRequest},
+		{"validation", "", &fakePinRepository{}, true, http.StatusBadRequest},
+		{"repository error", "Beach", &fakePinRepository{createErr: errors.New("database error")}, true, http.StatusInternalServerError},
+		{"success", "Beach", &fakePinRepository{}, true, http.StatusCreated},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := newPinsTestHandler(usecase.NewService(tt.repo))
+			handler := newPinsTestHandler(t, usecase.NewService(tt.repo))
 
-			req := httptest.NewRequest(
-				http.MethodPost,
-				"/api/v1/pins",
-				bytes.NewBufferString(tt.body),
-			)
-			req.Header.Set("Content-Type", "application/json")
+			var req *http.Request
+			if tt.name == "missing image" || tt.name == "validation" {
+				var body bytes.Buffer
+				writer := multipart.NewWriter(&body)
+				_ = writer.WriteField("name", tt.body)
+				_ = writer.Close()
+				req = httptest.NewRequest(http.MethodPost, "/api/v1/pins", &body)
+				req.Header.Set("Content-Type", writer.FormDataContentType())
+			} else {
+				req = newMultipartPinRequest(t, tt.body)
+			}
 
 			if tt.auth {
 				manager := middleware.NewTokenManager(
@@ -320,7 +341,7 @@ func TestListHandlerWithCursor(t *testing.T) {
 		},
 	}
 
-	handler := newPinsTestHandler(usecase.NewService(repo))
+	handler := newPinsTestHandler(t, usecase.NewService(repo))
 
 	req := httptest.NewRequest(
 		http.MethodPost,
@@ -335,5 +356,27 @@ func TestListHandlerWithCursor(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+}
+
+type failingImageStorage struct{}
+
+func (failingImageStorage) Save(io.Reader) (string, error) { return "", errors.New("disk unavailable") }
+func (failingImageStorage) Delete(string) error            { return nil }
+
+func TestCreateHandlerMapsImageStorageFailureToInternalServerError(t *testing.T) {
+	service := usecase.NewService(&fakePinRepository{})
+	handler := NewHandler(service, "", validator.New(), failingImageStorage{})
+	req := newMultipartPinRequest(t, "Beach")
+	manager := middleware.NewTokenManager([]byte("12345678901234567890123456789012"), 3600)
+	token, err := manager.Issue(42)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	manager.Middleware(http.HandlerFunc(handler.Create)).ServeHTTP(rec, req)
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 for storage failure, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
