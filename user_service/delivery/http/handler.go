@@ -6,6 +6,9 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"strconv"
+	"strings"
+	"unicode/utf8"
 
 	"2026_2_PinPals/pkg/httpx"
 	"2026_2_PinPals/pkg/images"
@@ -60,12 +63,12 @@ func NewHandler(service UserService, options ...HandlerOptions) *Handler {
 func (h *Handler) GetMe(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
-		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized")
+		httpx.WriteError(w, http.StatusUnauthorized, "необходима авторизация")
 		return
 	}
 	user, err := h.service.GetProfile(r.Context(), userID)
 	if err != nil {
-		h.writeError(w, r, err, "failed to get profile")
+		h.writeError(w, r, err, "не удалось получить профиль")
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, UserResponseFromDomain(*user, h.options.BaseURL))
@@ -82,7 +85,7 @@ func (h *Handler) GetMe(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
-		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized")
+		httpx.WriteError(w, http.StatusUnauthorized, "необходима авторизация")
 		return
 	}
 
@@ -97,7 +100,7 @@ func (h *Handler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(
 			w,
 			http.StatusUnsupportedMediaType,
-			"unsupported content type",
+			"неподдерживаемый тип содержимого",
 		)
 		return
 	}
@@ -115,13 +118,13 @@ func (h *Handler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		if err := req.Validate(); err != nil {
+			httpx.WriteError(w, http.StatusBadRequest, "некорректные данные профиля")
+			return
+		}
 		input, err = req.ToDomain()
 		if err != nil {
-			httpx.WriteError(
-				w,
-				http.StatusBadRequest,
-				"invalid profile data",
-			)
+			httpx.WriteError(w, http.StatusBadRequest, "некорректные данные профиля")
 			return
 		}
 
@@ -139,7 +142,7 @@ func (h *Handler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(
 			w,
 			http.StatusUnsupportedMediaType,
-			"content type must be application/json or multipart/form-data",
+			"поддерживаются JSON и multipart/form-data",
 		)
 		return
 	}
@@ -161,18 +164,6 @@ func (h *Handler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 		uploadedFilename = ""
 	}
 
-	if mediaType == "application/json" && input.AvatarURLSet {
-		oldUser, err := h.service.GetProfile(r.Context(), userID)
-		if err != nil {
-			h.writeError(w, r, err, "failed to get old profile")
-			return
-		}
-
-		if oldUser.AvatarURL != nil {
-			previousAvatar = *oldUser.AvatarURL
-		}
-	}
-
 	user, err := h.service.UpdateProfile(
 		r.Context(),
 		userID,
@@ -185,7 +176,7 @@ func (h *Handler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 			w,
 			r,
 			err,
-			"failed to update profile",
+			"не удалось обновить профиль",
 		)
 		return
 	}
@@ -224,105 +215,146 @@ func (h *Handler) parseMultipartProfile(
 	userID int,
 ) (domain.UpdateProfileInput, string, string, bool) {
 	var input domain.UpdateProfileInput
-
 	r.Body = http.MaxBytesReader(w, r.Body, images.MaxUploadSize+(1<<20))
-
 	if err := r.ParseMultipartForm(1 << 20); err != nil {
 		var maxErr *http.MaxBytesError
-
 		if errors.As(err, &maxErr) {
-			httpx.WriteError(w, http.StatusRequestEntityTooLarge, "request body too large")
+			httpx.WriteError(w, http.StatusRequestEntityTooLarge, "размер запроса слишком велик")
 		} else {
-			httpx.WriteError(w, http.StatusBadRequest, "invalid multipart form")
+			httpx.WriteError(w, http.StatusBadRequest, "некорректная форма профиля")
 		}
-
 		return input, "", "", false
 	}
-
-	if r.MultipartForm != nil {
-		defer r.MultipartForm.RemoveAll()
+	if r.MultipartForm == nil {
+		httpx.WriteError(w, http.StatusBadRequest, "некорректная форма профиля")
+		return input, "", "", false
 	}
-
-	if values, exists := r.MultipartForm.Value["name"]; exists && len(values) > 0 {
-		value := values[0]
+	defer r.MultipartForm.RemoveAll()
+	allowed := map[string]bool{"name": true, "user_tag": true, "description": true, "clear_description": true, "remove_avatar": true}
+	for key, values := range r.MultipartForm.Value {
+		if !allowed[key] || len(values) != 1 {
+			httpx.WriteError(w, http.StatusBadRequest, "некорректные поля формы профиля")
+			return input, "", "", false
+		}
+	}
+	read := func(key string) (string, bool) {
+		values, ok := r.MultipartForm.Value[key]
+		if !ok {
+			return "", false
+		}
+		return values[0], true
+	}
+	if value, ok := read("name"); ok {
+		value = strings.TrimSpace(value)
+		if value == "" || utf8.RuneCountInString(value) > 255 {
+			httpx.WriteError(w, http.StatusBadRequest, "некорректное имя пользователя")
+			return input, "", "", false
+		}
 		input.Name = &value
 	}
-
-	if values, exists := r.MultipartForm.Value["user_tag"]; exists && len(values) > 0 {
-		value := values[0]
+	if value, ok := read("user_tag"); ok {
+		value = strings.TrimSpace(value)
+		if value == "" || utf8.RuneCountInString(value) > 64 {
+			httpx.WriteError(w, http.StatusBadRequest, "некорректный тег пользователя")
+			return input, "", "", false
+		}
 		input.UserTag = &value
 	}
-
-	if values, exists := r.MultipartForm.Value["description"]; exists && len(values) > 0 {
+	if value, ok := read("description"); ok {
 		input.DescriptionSet = true
-
-		if values[0] != "" {
-			value := values[0]
+		value = strings.TrimSpace(value)
+		if value != "" {
+			if utf8.RuneCountInString(value) > 5000 {
+				httpx.WriteError(w, http.StatusBadRequest, "описание слишком длинное")
+				return input, "", "", false
+			}
 			input.Description = &value
 		}
 	}
-
-	file, header, err := r.FormFile("avatar")
-
-	if errors.Is(err, http.ErrMissingFile) {
-		return input, "", "", true
-	}
-
-	if err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid avatar file")
-		return input, "", "", false
-	}
-
-	defer file.Close()
-
-	if header.Size > images.MaxUploadSize {
-		httpx.WriteError(w, http.StatusRequestEntityTooLarge, "avatar exceeds 10 MiB")
-		return input, "", "", false
-	}
-
-	if h.options.ImageStorage == nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "image storage is not configured")
-		return input, "", "", false
-	}
-
-	oldUser, err := h.service.GetProfile(r.Context(), userID)
-	if err != nil {
-		h.writeError(w, r, err, "failed to get old profile")
-		return input, "", "", false
-	}
-
-	previousAvatar := ""
-
-	if oldUser.AvatarURL != nil {
-		previousAvatar = *oldUser.AvatarURL
-	}
-
-	filename, err := h.options.ImageStorage.Save(file)
-
-	if err != nil {
-		switch {
-		case errors.Is(err, images.ErrImageTooLarge):
-			httpx.WriteError(w, http.StatusRequestEntityTooLarge, "avatar exceeds 10 MiB")
-
-		case errors.Is(err, images.ErrInvalidImage):
-			httpx.WriteError(w, http.StatusBadRequest, "unsupported image format")
-
-		default:
-			middleware.LoggerFromContext(r.Context()).ErrorContext(
-				r.Context(),
-				"failed to save avatar",
-				"error", err,
-			)
-
-			httpx.WriteError(w, http.StatusInternalServerError, "failed to save avatar")
+	if value, ok := read("clear_description"); ok {
+		clear, err := strconv.ParseBool(value)
+		if err != nil || clear && input.DescriptionSet {
+			httpx.WriteError(w, http.StatusBadRequest, "некорректное значение clear_description")
+			return input, "", "", false
 		}
-
+		if clear {
+			input.DescriptionSet = true
+		}
+	}
+	removeAvatar := false
+	if value, ok := read("remove_avatar"); ok {
+		var err error
+		removeAvatar, err = strconv.ParseBool(value)
+		if err != nil {
+			httpx.WriteError(w, http.StatusBadRequest, "некорректное значение remove_avatar")
+			return input, "", "", false
+		}
+	}
+	for key, files := range r.MultipartForm.File {
+		if key != "avatar" || len(files) != 1 {
+			httpx.WriteError(w, http.StatusBadRequest, "допускается один файл в поле avatar")
+			return input, "", "", false
+		}
+	}
+	file, header, fileErr := r.FormFile("avatar")
+	hasFile := fileErr == nil
+	if fileErr != nil && !errors.Is(fileErr, http.ErrMissingFile) {
+		httpx.WriteError(w, http.StatusBadRequest, "не удалось прочитать файл аватара")
 		return input, "", "", false
 	}
-
-	input.AvatarURL = &filename
-	input.AvatarURLSet = true
-	return input, filename, previousAvatar, true
+	if removeAvatar && hasFile {
+		_ = file.Close()
+		httpx.WriteError(w, http.StatusBadRequest, "нельзя одновременно загрузить и удалить аватар")
+		return input, "", "", false
+	}
+	if input.Name == nil && input.UserTag == nil && !input.DescriptionSet && !removeAvatar && !hasFile {
+		httpx.WriteError(w, http.StatusBadRequest, "не указаны поля для изменения")
+		return input, "", "", false
+	}
+	if removeAvatar || hasFile {
+		oldUser, err := h.service.GetProfile(r.Context(), userID)
+		if err != nil {
+			h.writeError(w, r, err, "не удалось получить текущий профиль")
+			if hasFile {
+				_ = file.Close()
+			}
+			return input, "", "", false
+		}
+		previousAvatar := ""
+		if oldUser.AvatarURL != nil {
+			previousAvatar = *oldUser.AvatarURL
+		}
+		if removeAvatar {
+			input.AvatarURLSet = true
+			return input, "", previousAvatar, true
+		}
+		defer file.Close()
+		if header.Size > images.MaxUploadSize {
+			httpx.WriteError(w, http.StatusRequestEntityTooLarge, "размер изображения не должен превышать 10 МиБ")
+			return input, "", "", false
+		}
+		if h.options.ImageStorage == nil {
+			httpx.WriteError(w, http.StatusInternalServerError, "загрузка аватара временно недоступна")
+			return input, "", "", false
+		}
+		filename, err := h.options.ImageStorage.Save(file)
+		if err != nil {
+			switch {
+			case errors.Is(err, images.ErrImageTooLarge):
+				httpx.WriteError(w, http.StatusRequestEntityTooLarge, "размер изображения не должен превышать 10 МиБ")
+			case errors.Is(err, images.ErrInvalidImage):
+				httpx.WriteError(w, http.StatusBadRequest, "поддерживаются только изображения JPEG, PNG, GIF и WEBP")
+			default:
+				middleware.LoggerFromContext(r.Context()).ErrorContext(r.Context(), "не удалось сохранить аватар", "error", err)
+				httpx.WriteError(w, http.StatusInternalServerError, "не удалось сохранить аватар")
+			}
+			return input, "", "", false
+		}
+		input.AvatarURL = &filename
+		input.AvatarURLSet = true
+		return input, filename, previousAvatar, true
+	}
+	return input, "", "", true
 }
 
 // DeleteMe godoc
@@ -334,11 +366,11 @@ func (h *Handler) parseMultipartProfile(
 func (h *Handler) DeleteMe(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
-		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized")
+		httpx.WriteError(w, http.StatusUnauthorized, "необходима авторизация")
 		return
 	}
 	if err := h.service.DeleteProfile(r.Context(), userID); err != nil {
-		h.writeError(w, r, err, "failed to delete profile")
+		h.writeError(w, r, err, "не удалось удалить профиль")
 		return
 	}
 	// Профиль удалён: отзываем текущий токен и очищаем cookie.
@@ -357,9 +389,9 @@ func (h *Handler) DeleteMe(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) writeError(w http.ResponseWriter, r *http.Request, err error, fallback string) {
 	switch {
 	case errors.Is(err, domain.ErrValidation):
-		httpx.WriteError(w, http.StatusBadRequest, "invalid profile data")
+		httpx.WriteError(w, http.StatusBadRequest, "некорректные данные профиля")
 	case errors.Is(err, domain.ErrUserNotFound):
-		httpx.WriteError(w, http.StatusNotFound, "user not found")
+		httpx.WriteError(w, http.StatusNotFound, "пользователь не найден")
 	case errors.Is(err, domain.ErrUserTagExists):
 		httpx.WriteJSON(w, http.StatusConflict, map[string]any{"error": "conflict", "fields": map[string]string{"user_tag": "already_exists"}})
 	default:

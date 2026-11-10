@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"time"
 
-	_ "2026_2_PinPals/docs/pin"
 	httphandler "2026_2_PinPals/pin_service/delivery/http"
 	"2026_2_PinPals/pin_service/repository"
 	"2026_2_PinPals/pin_service/usecase"
@@ -15,8 +14,6 @@ import (
 	"2026_2_PinPals/pkg/images"
 	"2026_2_PinPals/pkg/middleware"
 	"2026_2_PinPals/pkg/server"
-
-	httpSwagger "github.com/swaggo/http-swagger/v2"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -59,8 +56,11 @@ func RegisterRoutes(cfg *config.Config, logger *slog.Logger, pool *pgxpool.Pool,
 		"POST /api/v1/pins",
 		middleware.CSRF(middleware.Access(tokenManager)(http.HandlerFunc(pinHandler.Create))),
 	)
+	mux.Handle("PATCH /api/v1/pins/{pinID}", middleware.CSRF(middleware.Access(tokenManager)(http.HandlerFunc(pinHandler.Update))))
+
+	mux.Handle("DELETE /api/v1/pins/{pinID}", middleware.CSRF(middleware.Access(tokenManager)(http.HandlerFunc(pinHandler.Delete))))
 	deskService := usecase.NewDeskService(pinRepository)
-	deskHandler := httphandler.NewDeskHandler(deskService, cfg.App.BaseURL)
+	deskHandler := httphandler.NewDeskHandler(deskService, cfg.App.BaseURL, images.NewStorage(cfg.App.ImageDir))
 	mux.Handle("POST /api/v1/desks", middleware.CSRF(middleware.Access(tokenManager)(http.HandlerFunc(deskHandler.Create))))
 	mux.Handle("GET /api/v1/desks/me", middleware.Access(tokenManager)(http.HandlerFunc(deskHandler.ListOwn)))
 	mux.HandleFunc("GET /api/v1/users/{userID}/desks", deskHandler.ListPublic)
@@ -75,7 +75,6 @@ func RegisterRoutes(cfg *config.Config, logger *slog.Logger, pool *pgxpool.Pool,
 	mux.Handle("DELETE /api/v1/pins/{pinID}/like", middleware.CSRF(middleware.Access(tokenManager)(http.HandlerFunc(likeHandler.Remove))))
 	mux.Handle("GET /api/v1/pins/{pinID}/likes", middleware.OptionalAccess(tokenManager)(http.HandlerFunc(likeHandler.GetStats)))
 	mux.HandleFunc("GET /images/{filename}", imageHandler.Get)
-	mux.Handle("GET /swagger/", httpSwagger.Handler(httpSwagger.URL("/swagger/doc.json")))
 }
 
 func Run(ctx context.Context) error {

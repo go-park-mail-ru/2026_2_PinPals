@@ -1,64 +1,49 @@
 package http
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
+	"2026_2_PinPals/pkg/images"
 	"2026_2_PinPals/pkg/middleware"
+	httpmocks "2026_2_PinPals/user_service/delivery/http/mocks"
 	"2026_2_PinPals/user_service/domain"
+	"go.uber.org/mock/gomock"
 )
 
-type fakeUserService struct {
-	user        *domain.User
-	getErr      error
-	updateErr   error
-	deleteErr   error
-	updated     domain.UpdateProfileInput
-	deleted     bool
-	updatedID   int
-	requestedID int
-}
-
-func (f *fakeUserService) GetProfile(_ context.Context, id int) (*domain.User, error) {
-	f.requestedID = id
-	return f.user, f.getErr
-}
-func (f *fakeUserService) UpdateProfile(_ context.Context, id int, input domain.UpdateProfileInput) (*domain.User, error) {
-	f.updatedID = id
-	f.updated = input
-	return f.user, f.updateErr
-}
-func (f *fakeUserService) DeleteProfile(_ context.Context, id int) error {
-	f.requestedID = id
-	f.deleted = true
-	return f.deleteErr
-}
-
 func serveAsUser(t *testing.T, userID int, next http.Handler, method, target string, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(method, target, bytes.NewBufferString(body))
+	if body != "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	return serveAsUserRequest(t, userID, next, req)
+}
+
+func serveAsUserRequest(t *testing.T, userID int, next http.Handler, req *http.Request) *httptest.ResponseRecorder {
 	t.Helper()
 	manager := middleware.NewTokenManager([]byte("01234567890123456789012345678901"), int64(time.Hour/time.Second))
 	token, err := manager.Issue(userID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	req := httptest.NewRequest(method, target, strings.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+token)
-	if body != "" {
-		req.Header.Set("Content-Type", "application/json")
-	}
 	rec := httptest.NewRecorder()
 	manager.Middleware(next).ServeHTTP(rec, req)
 	return rec
 }
 
 func TestGetMeReturnsCurrentUser(t *testing.T) {
-	service := &fakeUserService{user: &domain.User{ID: 9, Name: "Alex", UserTag: "alex"}}
+	ctrl := gomock.NewController(t)
+	service := httpmocks.NewMockUserService(ctrl)
+	service.EXPECT().GetProfile(gomock.Any(), 9).Return(&domain.User{ID: 9, Name: "Alex", UserTag: "alex"}, nil)
 	h := NewHandler(service)
 	rec := serveAsUser(t, 9, http.HandlerFunc(h.GetMe), http.MethodGet, "/api/v1/users/me", "")
 	if rec.Code != http.StatusOK {
@@ -68,28 +53,36 @@ func TestGetMeReturnsCurrentUser(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
-	if got.ID != 9 || service.requestedID != 9 {
-		t.Fatalf("unexpected user response/request: %#v, %d", got, service.requestedID)
+	if got.ID != 9 {
+		t.Fatalf("unexpected user response: %#v", got)
 	}
 }
 
-func TestUpdateMeCanClearNullableProfileFields(t *testing.T) {
-	service := &fakeUserService{user: &domain.User{ID: 9, Name: "Alex", UserTag: "alex"}}
+func TestUpdateMeCanClearNullableDescription(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	service := httpmocks.NewMockUserService(ctrl)
+	service.EXPECT().UpdateProfile(gomock.Any(), 9, domain.UpdateProfileInput{DescriptionSet: true}).
+		Return(&domain.User{ID: 9, Name: "Alex", UserTag: "alex"}, nil)
 	h := NewHandler(service)
-	rec := serveAsUser(t, 9, http.HandlerFunc(h.UpdateMe), http.MethodPatch, "/api/v1/users/me", `{"description":null,"avatar_url":null}`)
+	rec := serveAsUser(t, 9, http.HandlerFunc(h.UpdateMe), http.MethodPatch, "/api/v1/users/me", `{"description":null}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
-	if service.updatedID != 9 || !service.updated.DescriptionSet || !service.updated.AvatarURLSet {
-		t.Fatalf("nullable fields were not marked as explicitly set: %#v", service.updated)
-	}
-	if service.updated.Description != nil || service.updated.AvatarURL != nil {
-		t.Fatalf("expected nullable fields to be cleared: %#v", service.updated)
+}
+
+func TestUpdateMeRejectsClientSuppliedAvatarURL(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	service := httpmocks.NewMockUserService(ctrl)
+	h := NewHandler(service)
+	rec := serveAsUser(t, 9, http.HandlerFunc(h.UpdateMe), http.MethodPatch, "/api/v1/users/me", `{"avatar_url":"https://example.test/avatar.png"}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
 func TestUpdateMeRejectsInvalidNullableValue(t *testing.T) {
-	service := &fakeUserService{user: &domain.User{ID: 9}}
+	ctrl := gomock.NewController(t)
+	service := httpmocks.NewMockUserService(ctrl)
 	h := NewHandler(service)
 	rec := serveAsUser(t, 9, http.HandlerFunc(h.UpdateMe), http.MethodPatch, "/api/v1/users/me", `{"description":42}`)
 	if rec.Code != http.StatusBadRequest {
@@ -97,32 +90,65 @@ func TestUpdateMeRejectsInvalidNullableValue(t *testing.T) {
 	}
 }
 
-func TestDeleteMeCallsService(t *testing.T) {
-	service := &fakeUserService{}
-	h := NewHandler(service)
-	rec := serveAsUser(t, 9, http.HandlerFunc(h.DeleteMe), http.MethodDelete, "/api/v1/users/me", "")
-	if rec.Code != http.StatusNoContent || !service.deleted || service.requestedID != 9 {
-		t.Fatalf("unexpected delete result: status=%d deleted=%v id=%d", rec.Code, service.deleted, service.requestedID)
+func TestUpdateMeUploadsAvatarAsMultipartImage(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	service := httpmocks.NewMockUserService(ctrl)
+	storage := images.NewStorage(t.TempDir())
+	service.EXPECT().GetProfile(gomock.Any(), 9).Return(&domain.User{ID: 9, Name: "Alex"}, nil)
+	service.EXPECT().UpdateProfile(gomock.Any(), 9, gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ int, input domain.UpdateProfileInput) (*domain.User, error) {
+			if !input.AvatarURLSet || input.AvatarURL == nil || !images.IsStoredFilename(*input.AvatarURL) {
+				t.Fatalf("expected stored avatar filename, got %#v", input)
+			}
+			return &domain.User{ID: 9, Name: "Alex", AvatarURL: input.AvatarURL}, nil
+		},
+	)
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("avatar", "avatar.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = part.Write([]byte("\x89PNG\r\n\x1a\nimage-data"))
+	_ = writer.WriteField("name", "Alex")
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPatch, "/api/v1/users/me", &body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	h := NewHandler(service, HandlerOptions{BaseURL: "https://example.test", ImageStorage: storage})
+	rec := serveAsUserRequest(t, 9, http.HandlerFunc(h.UpdateMe), req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
-type fakeRevoker struct {
-	tokens []string
-	err    error
-}
-
-func (f *fakeRevoker) Revoke(_ context.Context, token string) error {
-	f.tokens = append(f.tokens, token)
-	return f.err
+func TestDeleteMeCallsService(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	service := httpmocks.NewMockUserService(ctrl)
+	service.EXPECT().DeleteProfile(gomock.Any(), 9).Return(nil)
+	h := NewHandler(service)
+	rec := serveAsUser(t, 9, http.HandlerFunc(h.DeleteMe), http.MethodDelete, "/api/v1/users/me", "")
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("unexpected delete status: %d", rec.Code)
+	}
 }
 
 func TestDeleteMeRevokesTokenAndClearsCookies(t *testing.T) {
-	service := &fakeUserService{}
-	revoker := &fakeRevoker{}
+	ctrl := gomock.NewController(t)
+	service := httpmocks.NewMockUserService(ctrl)
+	revoker := httpmocks.NewMockTokenRevoker(ctrl)
+	service.EXPECT().DeleteProfile(gomock.Any(), 9).Return(nil)
+	revoker.EXPECT().Revoke(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, token string) error {
+		if token == "" {
+			t.Fatal("revoked token must not be empty")
+		}
+		return nil
+	})
 	h := NewHandler(service, HandlerOptions{TokenRevoker: revoker})
 	rec := serveAsUser(t, 9, http.HandlerFunc(h.DeleteMe), http.MethodDelete, "/api/v1/users/me", "")
-	if rec.Code != http.StatusNoContent || len(revoker.tokens) != 1 || revoker.tokens[0] == "" {
-		t.Fatalf("expected 204 and one revoked token, got status=%d tokens=%v", rec.Code, revoker.tokens)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", rec.Code)
 	}
 	cleared := 0
 	for _, c := range rec.Result().Cookies() {
@@ -136,17 +162,21 @@ func TestDeleteMeRevokesTokenAndClearsCookies(t *testing.T) {
 }
 
 func TestDeleteMeDoesNotRevokeWhenDeleteFails(t *testing.T) {
-	service := &fakeUserService{deleteErr: errors.New("database unavailable")}
-	revoker := &fakeRevoker{}
+	ctrl := gomock.NewController(t)
+	service := httpmocks.NewMockUserService(ctrl)
+	revoker := httpmocks.NewMockTokenRevoker(ctrl)
+	service.EXPECT().DeleteProfile(gomock.Any(), 9).Return(errors.New("database unavailable"))
 	h := NewHandler(service, HandlerOptions{TokenRevoker: revoker})
 	rec := serveAsUser(t, 9, http.HandlerFunc(h.DeleteMe), http.MethodDelete, "/api/v1/users/me", "")
-	if rec.Code != http.StatusInternalServerError || len(revoker.tokens) != 0 {
-		t.Fatalf("expected 500 without revocation, got status=%d tokens=%v", rec.Code, revoker.tokens)
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", rec.Code)
 	}
 }
 
 func TestGetMeMapsNotFound(t *testing.T) {
-	service := &fakeUserService{getErr: domain.ErrUserNotFound}
+	ctrl := gomock.NewController(t)
+	service := httpmocks.NewMockUserService(ctrl)
+	service.EXPECT().GetProfile(gomock.Any(), 9).Return(nil, domain.ErrUserNotFound)
 	h := NewHandler(service)
 	rec := serveAsUser(t, 9, http.HandlerFunc(h.GetMe), http.MethodGet, "/api/v1/users/me", "")
 	if rec.Code != http.StatusNotFound {
@@ -155,7 +185,9 @@ func TestGetMeMapsNotFound(t *testing.T) {
 }
 
 func TestDeleteMeMapsInternalError(t *testing.T) {
-	service := &fakeUserService{deleteErr: errors.New("database unavailable")}
+	ctrl := gomock.NewController(t)
+	service := httpmocks.NewMockUserService(ctrl)
+	service.EXPECT().DeleteProfile(gomock.Any(), 9).Return(errors.New("database unavailable"))
 	h := NewHandler(service)
 	rec := serveAsUser(t, 9, http.HandlerFunc(h.DeleteMe), http.MethodDelete, "/api/v1/users/me", "")
 	if rec.Code != http.StatusInternalServerError {

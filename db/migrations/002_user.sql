@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS "user" (
 
 COMMENT ON TABLE  "user"             IS 'Учётные записи пользователей';
 COMMENT ON COLUMN "user".user_tag    IS 'Уникальный тег для поиска';
-COMMENT ON COLUMN "user".avatar_url  IS 'Ссылка на аватар в MinIO';
+COMMENT ON COLUMN "user".avatar_url  IS 'Имя файла аватара в общем локальном хранилище изображений';
 COMMENT ON COLUMN "user".deleted_at  IS 'Момент soft delete; Если NULL, то запись активна';
 
 CREATE OR REPLACE TRIGGER trg_user_check_age

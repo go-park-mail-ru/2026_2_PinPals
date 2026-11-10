@@ -65,6 +65,7 @@ func UserResponseFromDomain(u domain.User, baseURL string) UserResponse {
 		CreatedAt:   u.CreatedAt,
 	}
 }
+
 type AuthResponseDTO struct {
 	Token string       `json:"-"`
 	User  UserResponse `json:"user"`

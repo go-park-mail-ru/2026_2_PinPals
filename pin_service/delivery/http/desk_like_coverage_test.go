@@ -285,8 +285,8 @@ func TestDeskHandlerUpdateBranches(t *testing.T) {
 
 	svc := &coverageDeskService{}
 	h = NewDeskHandler(svc, "")
-	rec := invokeWithUser(t, 5, http.HandlerFunc(h.Update), http.MethodPatch, "/api/v1/desks/4", `{"description":null,"avatar_img_url":"new.jpg","entry_status":1}`, map[string]string{"deskID": "4"})
-	if rec.Code != http.StatusOK || svc.userID != 5 || svc.deskID != 4 || !svc.updateInput.DescriptionSet || svc.updateInput.Description != nil || !svc.updateInput.AvatarImgURLSet || svc.updateInput.AvatarImgURL == nil || *svc.updateInput.AvatarImgURL != "new.jpg" {
+	rec := invokeWithUser(t, 5, http.HandlerFunc(h.Update), http.MethodPatch, "/api/v1/desks/4", `{"description":null,"remove_avatar":true,"entry_status":1}`, map[string]string{"deskID": "4"})
+	if rec.Code != http.StatusOK || svc.userID != 5 || svc.deskID != 4 || !svc.updateInput.DescriptionSet || svc.updateInput.Description != nil || !svc.updateInput.AvatarImgURLSet || svc.updateInput.AvatarImgURL != nil {
 		t.Fatalf("status=%d input=%+v body=%s", rec.Code, svc.updateInput, rec.Body.String())
 	}
 }
@@ -327,7 +327,7 @@ func TestDeskDTOAndResponseCoverage(t *testing.T) {
 	}
 
 	var update UpdateDeskRequest
-	if err := json.Unmarshal([]byte(`{"name":"New","description":"text","avatar_img_url":null,"entry_status":1}`), &update); err != nil {
+	if err := json.Unmarshal([]byte(`{"name":"New","description":"text","remove_avatar":true,"entry_status":1}`), &update); err != nil {
 		t.Fatal(err)
 	}
 	input, err := update.ToDomain()
@@ -337,10 +337,10 @@ func TestDeskDTOAndResponseCoverage(t *testing.T) {
 	if _, err := (UpdateDeskRequest{Description: json.RawMessage(`123`)}).ToDomain(); err == nil {
 		t.Fatal("expected non-string nullable value to fail")
 	}
-	if value, err := decodeNullableString(json.RawMessage(`"ok"`)); err != nil || value == nil || *value != "ok" {
+	if value, err := decodeDeskNullableString(json.RawMessage(`"ok"`)); err != nil || value == nil || *value != "ok" {
 		t.Fatalf("value=%v err=%v", value, err)
 	}
-	if value, err := decodeNullableString(json.RawMessage(`null`)); err != nil || value != nil {
+	if value, err := decodeDeskNullableString(json.RawMessage(`null`)); err != nil || value != nil {
 		t.Fatalf("null value=%v err=%v", value, err)
 	}
 
@@ -351,7 +351,7 @@ func TestDeskDTOAndResponseCoverage(t *testing.T) {
 		t.Fatalf("unexpected response mapping: %+v", resp)
 	}
 	withoutURL := NewDeskHandler(&coverageDeskService{}, "").response(desk, nil)
-	if withoutURL.AvatarImgURL == nil || *withoutURL.AvatarImgURL != "cover.jpg" || withoutURL.Pins != nil {
+	if withoutURL.AvatarImgURL == nil || *withoutURL.AvatarImgURL != "/images/cover.jpg" || withoutURL.Pins != nil {
 		t.Fatalf("unexpected no-base-url response: %+v", withoutURL)
 	}
 }

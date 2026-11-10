@@ -103,6 +103,7 @@ func (h *LikeHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 	}
 	httpx.WriteJSON(w, http.StatusOK, stats)
 }
+
 func (h *LikeHandler) writeError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, domain.ErrValidation):

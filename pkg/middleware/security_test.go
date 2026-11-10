@@ -20,11 +20,12 @@ func TestSecurityHeaders(t *testing.T) {
 		t.Fatal("API CSP must not allow inline scripts")
 	}
 }
-func TestSwaggerCSPAllowsEmbeddedUIBootstrap(t *testing.T) {
-	h := SecurityHeaders(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(200) }))
+
+func TestSwaggerPathDoesNotRelaxCSP(t *testing.T) {
+	h := SecurityHeaders(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/swagger/index.html", nil))
-	if !strings.Contains(rec.Header().Get("Content-Security-Policy"), "unsafe-inline") {
-		t.Fatal("Swagger CSP is missing inline bootstrap exception")
+	if strings.Contains(rec.Header().Get("Content-Security-Policy"), "unsafe-inline") {
+		t.Fatal("Swagger path must not relax the API CSP")
 	}
 }

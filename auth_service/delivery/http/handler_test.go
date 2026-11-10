@@ -9,7 +9,9 @@ import (
 	"testing"
 	"time"
 
+	httpmocks "2026_2_PinPals/auth_service/delivery/http/mocks"
 	"2026_2_PinPals/auth_service/domain"
+	"go.uber.org/mock/gomock"
 )
 
 type fakeAuthHandlerService struct {
@@ -199,16 +201,6 @@ func TestAuthJSONBirthDateCompatibility(t *testing.T) {
 	}
 }
 
-type fakeTokenRevoker struct {
-	token string
-	err   error
-}
-
-func (f *fakeTokenRevoker) Revoke(_ context.Context, token string) error {
-	f.token = token
-	return f.err
-}
-
 func TestLoginSetsCookiesAndDoesNotExposeToken(t *testing.T) {
 	service := &fakeAuthHandlerService{
 		loginResult: domain.AuthResponse{
@@ -248,7 +240,9 @@ func TestLoginSetsCookiesAndDoesNotExposeToken(t *testing.T) {
 }
 
 func TestLogoutRevokesTokenAndClearsCookies(t *testing.T) {
-	revoker := &fakeTokenRevoker{}
+	ctrl := gomock.NewController(t)
+	revoker := httpmocks.NewMockTokenRevoker(ctrl)
+	revoker.EXPECT().Revoke(gomock.Any(), "jwt-to-revoke").Return(nil)
 	h := NewHandler(&fakeAuthHandlerService{}, nil, HandlerOptions{TokenRevoker: revoker})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
 	req.AddCookie(&http.Cookie{Name: "access_token", Value: "jwt-to-revoke"})
@@ -258,9 +252,6 @@ func TestLogoutRevokesTokenAndClearsCookies(t *testing.T) {
 
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("expected 204, got %d: %s", rec.Code, rec.Body.String())
-	}
-	if revoker.token != "jwt-to-revoke" {
-		t.Fatalf("revoked token = %q", revoker.token)
 	}
 	cleared := map[string]bool{}
 	for _, cookie := range rec.Result().Cookies() {
@@ -274,7 +265,9 @@ func TestLogoutRevokesTokenAndClearsCookies(t *testing.T) {
 }
 
 func TestLogoutReportsRevocationFailure(t *testing.T) {
-	revoker := &fakeTokenRevoker{err: errors.New("database unavailable")}
+	ctrl := gomock.NewController(t)
+	revoker := httpmocks.NewMockTokenRevoker(ctrl)
+	revoker.EXPECT().Revoke(gomock.Any(), "jwt-to-revoke").Return(errors.New("database unavailable"))
 	h := NewHandler(&fakeAuthHandlerService{}, nil, HandlerOptions{TokenRevoker: revoker})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
 	req.AddCookie(&http.Cookie{Name: "access_token", Value: "jwt-to-revoke"})

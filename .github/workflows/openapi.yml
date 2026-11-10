@@ -1,0 +1,116 @@
+name: OpenAPI documentation
+
+on:
+  push:
+    branches: [develop, RK2_combined]
+    paths:
+      - 'auth_service/**'
+      - 'pin_service/**'
+      - 'user_service/**'
+      - 'cmd/**'
+      - 'pkg/**'
+      - 'Makefile'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/openapi.yml'
+  pull_request:
+    branches: [develop, RK2_combined]
+    paths:
+      - 'auth_service/**'
+      - 'pin_service/**'
+      - 'user_service/**'
+      - 'cmd/**'
+      - 'pkg/**'
+      - 'Makefile'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/openapi.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: openapi-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Generate OpenAPI specifications for services present in this branch
+        run: |
+          for entry in "auth_service:auth" "pin_service:pin" "user_service:user"; do
+            service="${entry%%:*}"
+            output="${entry##*:}"
+            if [ -f "cmd/${service}/main.go" ] && [ -d "${service}" ]; then
+              go run github.com/swaggo/swag/cmd/swag@v1.16.6 init \
+                -g main.go -d "cmd/${service},${service}" \
+                -o "docs/${output}" --parseDependency --parseInternal
+            fi
+          done
+
+      - name: Prepare documentation site
+        run: |
+          mkdir -p site
+          for entry in "auth:Auth service" "pin:Pin service" "user:User service"; do
+            spec="${entry%%:*}"
+            label="${entry#*:}"
+            if [ -f "docs/${spec}/swagger.yaml" ]; then
+              mkdir -p "site/${spec}"
+              cp "docs/${spec}/swagger.yaml" "site/${spec}/openapi.yaml"
+              printf '<li><a href="%s/openapi.yaml">%s</a></li>\n' "${spec}" "${label}" >> site/service-links.html
+            fi
+          done
+          cat > site/index.html <<'HTML'
+          <!doctype html>
+          <html lang="ru">
+          <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PinPals API</title></head>
+          <body>
+            <h1>PinPals API — OpenAPI</h1>
+            <ul id="services"></ul>
+            <script>
+              fetch('service-links.html').then(r => r.text()).then(html => {
+                document.getElementById('services').innerHTML = html;
+              });
+            </script>
+          </body>
+          </html>
+          HTML
+          test -s site/service-links.html
+
+      - name: Upload specifications as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pinpals-openapi-${{ github.sha }}
+          path: site/
+          if-no-files-found: error
+
+      - name: Upload GitHub Pages artifact
+        if: github.ref == 'refs/heads/develop'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/
+
+  deploy:
+    if: github.ref == 'refs/heads/develop'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy OpenAPI documentation
+        id: deployment
+        uses: actions/deploy-pages@v4
