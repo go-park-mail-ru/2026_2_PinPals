@@ -8,19 +8,13 @@ import (
 )
 
 type CreatePinRequest struct {
-	ImageURL    string   `json:"image_url" validate:"required"`
-	Name        string   `json:"name" validate:"required"`
+	Name        string   `json:"name" validate:"required,max=255"`
 	Description *string  `json:"description,omitempty"`
 	Tags        []string `json:"tags,omitempty"`
 }
 
-func (r CreatePinRequest) ToDomain() domain.CreatePinInput {
-	return domain.CreatePinInput{
-		ImageURL:    r.ImageURL,
-		Name:        r.Name,
-		Description: r.Description,
-		Tags:        r.Tags,
-	}
+func (r CreatePinRequest) ToDomain(imageName string) domain.CreatePinInput {
+	return domain.CreatePinInput{ImageURL: imageName, Name: r.Name, Description: r.Description, Tags: r.Tags}
 }
 
 type CursorRequest struct {
@@ -29,10 +23,7 @@ type CursorRequest struct {
 }
 
 func (c CursorRequest) ToDomain() domain.Cursor {
-	return domain.Cursor{
-		CreatedAt: c.CreatedAt,
-		ID:        c.ID,
-	}
+	return domain.Cursor{CreatedAt: c.CreatedAt, ID: c.ID}
 }
 
 type ListRequest struct {
@@ -42,18 +33,14 @@ type ListRequest struct {
 
 func (r ListRequest) ToDomain() (int, *domain.Cursor) {
 	limit := 20
-
 	if r.Limit != nil {
 		limit = *r.Limit
 	}
-
 	var cursor *domain.Cursor
-
 	if r.Cursor != nil {
 		c := r.Cursor.ToDomain()
 		cursor = &c
 	}
-
 	return limit, cursor
 }
 
@@ -67,19 +54,10 @@ type PinResponse struct {
 }
 
 func PinResponseFromDomain(p domain.Pin, baseURL string) PinResponse {
-	resp := PinResponse{
-		ID:          p.ID,
-		CreatorID:   p.CreatorID,
-		ImageURL:    p.ImageURL,
-		Name:        p.Name,
-		Description: p.Description,
-		CreatedAt:   p.CreatedAt,
-	}
-
+	resp := PinResponse{ID: p.ID, CreatorID: p.CreatorID, ImageURL: p.ImageURL, Name: p.Name, Description: p.Description, CreatedAt: p.CreatedAt}
 	if baseURL != "" {
 		resp.ImageURL = baseURL + "/images/" + url.PathEscape(resp.ImageURL)
 	}
-
 	return resp
 }
 
@@ -89,10 +67,7 @@ type CursorResponse struct {
 }
 
 func CursorResponseFromDomain(c domain.Cursor) CursorResponse {
-	return CursorResponse{
-		CreatedAt: c.CreatedAt,
-		ID:        c.ID,
-	}
+	return CursorResponse{CreatedAt: c.CreatedAt, ID: c.ID}
 }
 
 type ListResponse struct {
@@ -105,15 +80,10 @@ func ListResponseFromDomain(page domain.Page, baseURL string) ListResponse {
 	for i, pin := range page.Pins {
 		pins[i] = PinResponseFromDomain(pin, baseURL)
 	}
-
-	resp := ListResponse{
-		Pins: pins,
-	}
-
+	resp := ListResponse{Pins: pins}
 	if page.NextCursor != nil {
 		cr := CursorResponseFromDomain(*page.NextCursor)
 		resp.NextCursor = &cr
 	}
-
 	return resp
 }

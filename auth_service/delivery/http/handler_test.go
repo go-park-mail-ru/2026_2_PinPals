@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"io"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -42,10 +40,6 @@ func (f *fakeAuthHandlerService) Login(
 	return f.loginResult, nil
 }
 
-func testLogger() *slog.Logger {
-	return slog.New(slog.NewTextHandler(io.Discard, nil))
-}
-
 func TestRegisterHandler(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -61,7 +55,7 @@ func TestRegisterHandler(t *testing.T) {
 		{
 			name:       "validation",
 			body:       `{"name":"Alex"}`,
-			err:        &domain.ValidationErrors{Fields: map[string]string{"user_tag": "required"}},
+			err:        &domain.ValidationErrors{Fields: map[string]string{"user_tag": domain.ValidationRequired}},
 			wantStatus: http.StatusBadRequest,
 		},
 		{
@@ -89,7 +83,7 @@ func TestRegisterHandler(t *testing.T) {
 				registerResult: domain.User{ID: 1, Name: "Alex"},
 				registerErr:    tt.err,
 			}
-			handler := NewHandler(service, nil, testLogger())
+			handler := NewHandler(service, nil)
 
 			req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewBufferString(tt.body))
 			req.Header.Set("Content-Type", "application/json")
@@ -99,6 +93,9 @@ func TestRegisterHandler(t *testing.T) {
 
 			if rec.Code != tt.wantStatus {
 				t.Fatalf("expected %d, got %d", tt.wantStatus, rec.Code)
+			}
+			if tt.name == "validation" && !bytes.Contains(rec.Body.Bytes(), []byte("ошибка_валидации")) {
+				t.Fatalf("expected localized validation code, got %s", rec.Body.String())
 			}
 		})
 	}
@@ -119,7 +116,13 @@ func TestLoginHandler(t *testing.T) {
 		{
 			name:       "validation",
 			body:       `{"name":"Alex"}`,
-			err:        &domain.ValidationErrors{Fields: map[string]string{"user_tag": "required"}},
+			err:        &domain.ValidationErrors{Fields: map[string]string{"user_tag": domain.ValidationRequired}},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "empty credentials",
+			body:       `{"user_tag":"","password":""}`,
+			err:        domain.ErrValidation,
 			wantStatus: http.StatusBadRequest,
 		},
 		{
@@ -153,7 +156,6 @@ func TestLoginHandler(t *testing.T) {
 			handler := NewHandler(
 				service,
 				func(int) (string, error) { return "jwt", nil },
-				testLogger(),
 			)
 
 			req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewBufferString(tt.body))
@@ -171,7 +173,7 @@ func TestLoginHandler(t *testing.T) {
 
 func TestNewHandler(t *testing.T) {
 	service := &fakeAuthHandlerService{}
-	h := NewHandler(service, nil, testLogger())
+	h := NewHandler(service, nil)
 	if h.service != service {
 		t.Fatal("service was not stored")
 	}
@@ -181,7 +183,7 @@ func TestAuthJSONBirthDateCompatibility(t *testing.T) {
 	service := &fakeAuthHandlerService{
 		registerResult: domain.User{BirthDate: time.Date(2004, 7, 21, 0, 0, 0, 0, time.UTC)},
 	}
-	h := NewHandler(service, nil, testLogger())
+	h := NewHandler(service, nil)
 
 	req := httptest.NewRequest(
 		http.MethodPost,
@@ -194,5 +196,96 @@ func TestAuthJSONBirthDateCompatibility(t *testing.T) {
 	h.Register(rec, req)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("expected 201, got %d", rec.Code)
+	}
+}
+
+type fakeTokenRevoker struct {
+	token string
+	err   error
+}
+
+func (f *fakeTokenRevoker) Revoke(_ context.Context, token string) error {
+	f.token = token
+	return f.err
+}
+
+func TestLoginSetsCookiesAndDoesNotExposeToken(t *testing.T) {
+	service := &fakeAuthHandlerService{
+		loginResult: domain.AuthResponse{
+			Token: "private-jwt-value",
+			User:  domain.User{ID: 7, UserTag: "alex"},
+		},
+	}
+	h := NewHandler(service, func(int) (string, error) { return "private-jwt-value", nil }, HandlerOptions{TokenTTL: 2 * time.Hour, SecureCookies: true})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewBufferString(`{"user_tag":"alex","password":"password123"}`))
+	req.Header.Set("Content-Type", "application/json; charset=utf-8")
+	rec := httptest.NewRecorder()
+
+	h.Login(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if bytes.Contains(rec.Body.Bytes(), []byte("private-jwt-value")) || bytes.Contains(rec.Body.Bytes(), []byte(`"token"`)) {
+		t.Fatalf("JWT must not be present in response body: %s", rec.Body.String())
+	}
+	cookies := rec.Result().Cookies()
+	var access, csrf *http.Cookie
+	for _, cookie := range cookies {
+		switch cookie.Name {
+		case "access_token":
+			access = cookie
+		case "csrf_token":
+			csrf = cookie
+		}
+	}
+	if access == nil || !access.HttpOnly || !access.Secure || access.Value != "private-jwt-value" || access.MaxAge != 7200 {
+		t.Fatalf("invalid access cookie: %#v", access)
+	}
+	if csrf == nil || csrf.HttpOnly || !csrf.Secure || csrf.Value == "" || csrf.MaxAge != 7200 {
+		t.Fatalf("invalid CSRF cookie: %#v", csrf)
+	}
+}
+
+func TestLogoutRevokesTokenAndClearsCookies(t *testing.T) {
+	revoker := &fakeTokenRevoker{}
+	h := NewHandler(&fakeAuthHandlerService{}, nil, HandlerOptions{TokenRevoker: revoker})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
+	req.AddCookie(&http.Cookie{Name: "access_token", Value: "jwt-to-revoke"})
+	rec := httptest.NewRecorder()
+
+	h.Logout(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if revoker.token != "jwt-to-revoke" {
+		t.Fatalf("revoked token = %q", revoker.token)
+	}
+	cleared := map[string]bool{}
+	for _, cookie := range rec.Result().Cookies() {
+		if cookie.MaxAge < 0 && cookie.Value == "" {
+			cleared[cookie.Name] = true
+		}
+	}
+	if !cleared["access_token"] || !cleared["csrf_token"] {
+		t.Fatalf("expected both auth cookies to be cleared, got %#v", cleared)
+	}
+}
+
+func TestLogoutReportsRevocationFailure(t *testing.T) {
+	revoker := &fakeTokenRevoker{err: errors.New("database unavailable")}
+	h := NewHandler(&fakeAuthHandlerService{}, nil, HandlerOptions{TokenRevoker: revoker})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
+	req.AddCookie(&http.Cookie{Name: "access_token", Value: "jwt-to-revoke"})
+	rec := httptest.NewRecorder()
+
+	h.Logout(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", rec.Code)
+	}
+	if len(rec.Result().Cookies()) != 0 {
+		t.Fatal("cookies must not be cleared when token revocation failed")
 	}
 }

@@ -33,6 +33,7 @@ func TestMustLoadAndDefaults(t *testing.T) {
 	os.Unsetenv("POSTGRES_HOST")
 	os.Unsetenv("POSTGRES_INTERNAL_PORT")
 	os.Unsetenv("POSTGRES_SSLMODE")
+	os.Unsetenv("APP_BASE_URL")
 	os.Unsetenv("AUTH_TOKEN_TTL")
 	os.Unsetenv("CORS_ALLOWED_ORIGINS")
 
@@ -57,6 +58,7 @@ func TestMustLoadCustomValues(t *testing.T) {
 	t.Setenv("APP_PORT", "9000")
 	t.Setenv("APP_ENV", "test")
 	t.Setenv("LOG_LEVEL", "debug")
+	t.Setenv("APP_BASE_URL", "https://api.example.test/")
 	t.Setenv("POSTGRES_HOST", "db")
 	t.Setenv("POSTGRES_INTERNAL_PORT", "5433")
 	t.Setenv("POSTGRES_SSLMODE", "require")
@@ -67,6 +69,9 @@ func TestMustLoadCustomValues(t *testing.T) {
 
 	if cfg.App.Port != "9000" || cfg.App.Env != "test" || cfg.App.LogLevel != "debug" {
 		t.Fatalf("unexpected app config: %#v", cfg.App)
+	}
+	if cfg.App.BaseURL != "https://api.example.test" {
+		t.Fatalf("base URL was not normalized: %q", cfg.App.BaseURL)
 	}
 	if cfg.Postgres.Host != "db" || cfg.Postgres.Port != "5433" || cfg.Postgres.SSLMode != "require" {
 		t.Fatalf("unexpected postgres config: %#v", cfg.Postgres)
@@ -110,6 +115,20 @@ func TestMustLoadValidationPanics(t *testing.T) {
 			func(t *testing.T) {
 				setValidEnv(t)
 				t.Setenv("AUTH_TOKEN_TTL", "not-a-duration")
+			},
+		},
+		{
+			"non-positive duration",
+			func(t *testing.T) {
+				setValidEnv(t)
+				t.Setenv("AUTH_TOKEN_TTL", "0s")
+			},
+		},
+		{
+			"sub-second duration",
+			func(t *testing.T) {
+				setValidEnv(t)
+				t.Setenv("AUTH_TOKEN_TTL", "500ms")
 			},
 		},
 	}
