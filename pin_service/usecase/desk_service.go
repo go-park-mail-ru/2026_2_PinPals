@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"strings"
+	"unicode/utf8"
 
 	"2026_2_PinPals/pin_service/domain"
 )
@@ -33,11 +34,14 @@ func (s *DeskService) Create(ctx context.Context, userID int, input domain.Creat
 	if input.Name == "" {
 		input.Name = "Untitled desk"
 	}
-	if len(input.Name) > 255 {
+	if utf8.RuneCountInString(input.Name) > 255 {
 		return domain.Desk{}, domain.ErrValidation
 	}
 	if input.Description != nil {
 		v := strings.TrimSpace(*input.Description)
+		if utf8.RuneCountInString(v) > 2000 {
+			return domain.Desk{}, domain.ErrValidation
+		}
 		input.Description = &v
 	}
 	return s.repository.CreateDesk(ctx, userID, input)
@@ -49,6 +53,7 @@ func (s *DeskService) ListOwn(ctx context.Context, userID int) ([]domain.Desk, e
 	}
 	return s.repository.ListOwn(ctx, userID)
 }
+
 func (s *DeskService) ListPublic(ctx context.Context, ownerID int, limit int) ([]domain.Desk, error) {
 	if ownerID < 1 || limit < 1 || limit > 100 {
 		return nil, domain.ErrValidation
@@ -79,7 +84,7 @@ func (s *DeskService) Update(ctx context.Context, userID, deskID int, input doma
 	}
 	if input.Name != nil {
 		v := strings.TrimSpace(*input.Name)
-		if v == "" || len(v) > 255 {
+		if v == "" || utf8.RuneCountInString(v) > 255 {
 			return domain.Desk{}, domain.ErrValidation
 		}
 		input.Name = &v
@@ -89,6 +94,9 @@ func (s *DeskService) Update(ctx context.Context, userID, deskID int, input doma
 	}
 	if input.Description != nil {
 		v := strings.TrimSpace(*input.Description)
+		if utf8.RuneCountInString(v) > 2000 {
+			return domain.Desk{}, domain.ErrValidation
+		}
 		input.Description = &v
 	}
 	if input.AvatarImgURL != nil {
@@ -118,12 +126,14 @@ func (s *DeskService) Delete(ctx context.Context, userID, deskID int) error {
 	}
 	return s.repository.DeleteDesk(ctx, deskID)
 }
+
 func (s *DeskService) AddPin(ctx context.Context, userID, deskID, pinID int) error {
 	if userID < 1 || deskID < 1 || pinID < 1 {
 		return domain.ErrValidation
 	}
 	return s.repository.AddPin(ctx, userID, deskID, pinID)
 }
+
 func (s *DeskService) RemovePin(ctx context.Context, userID, deskID, pinID int) error {
 	if userID < 1 || deskID < 1 || pinID < 1 {
 		return domain.ErrValidation

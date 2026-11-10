@@ -18,6 +18,7 @@ func TestWriteJSONEscapesHTMLForXSSResistance(t *testing.T) {
 		t.Fatalf("expected escaped HTML, got %s", body)
 	}
 }
+
 func TestDecodeJSONRejectsOversizedBody(t *testing.T) {
 	body := strings.Repeat(" ", int(MaxJSONBodySize+1))
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))

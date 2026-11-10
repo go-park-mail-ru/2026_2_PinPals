@@ -13,7 +13,9 @@ type userStatusStore struct {
 }
 
 func (s userStatusStore) Revoke(context.Context, string, time.Time) error { return nil }
+
 func (s userStatusStore) IsRevoked(context.Context, string) (bool, error) { return false, nil }
+
 func (s userStatusStore) IsUserDeleted(_ context.Context, id int) (bool, error) {
 	return s.deleted[id], nil
 }

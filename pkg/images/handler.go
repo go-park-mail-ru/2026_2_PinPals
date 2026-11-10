@@ -21,7 +21,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	filename := r.PathValue("filename")
 
 	if !isValidFilename(filename) {
-		http.Error(w, "invalid image filename", http.StatusBadRequest)
+		http.Error(w, "Некорректное имя файла изображения", http.StatusBadRequest)
 		return
 	}
 
@@ -34,7 +34,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		http.Error(w, "failed to read image", http.StatusInternalServerError)
+		http.Error(w, "Не удалось прочитать изображение", http.StatusInternalServerError)
 		return
 	}
 

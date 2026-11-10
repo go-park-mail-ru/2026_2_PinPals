@@ -148,5 +148,4 @@ networks:
 
 volumes:
   postgres_data:
-  minio_data:
   pin_images:

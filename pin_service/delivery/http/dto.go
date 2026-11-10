@@ -1,10 +1,14 @@
 package http
 
 import (
-	"net/url"
-	"time"
+    "bytes"
+    "encoding/json"
+    "net/url"
+    "strings"
+    "time"
+    "unicode/utf8"
 
-	"2026_2_PinPals/pin_service/domain"
+    "2026_2_PinPals/pin_service/domain"
 )
 
 type CreatePinRequest struct {
@@ -15,6 +19,61 @@ type CreatePinRequest struct {
 
 func (r CreatePinRequest) ToDomain(imageName string) domain.CreatePinInput {
 	return domain.CreatePinInput{ImageURL: imageName, Name: r.Name, Description: r.Description, Tags: r.Tags}
+}
+
+type UpdatePinRequest struct {
+    Name        *string         `json:"name,omitempty"`
+    Description json.RawMessage `json:"description,omitempty"`
+}
+
+func (r UpdatePinRequest) ToDomain() (
+    domain.UpdatePinInput,
+    bool,
+    error,
+) {
+    input := domain.UpdatePinInput{
+        Name: r.Name,
+    }
+
+    if input.Name != nil {
+        name := strings.TrimSpace(*input.Name)
+
+        if name == "" || utf8.RuneCountInString(name) > 255 {
+            return input, false, domain.ErrValidation
+        }
+
+        input.Name = &name
+    }
+
+    descriptionSet := len(r.Description) > 0
+
+    if descriptionSet {
+        raw := bytes.TrimSpace(r.Description)
+
+        if bytes.Equal(raw, []byte("null")) {
+            input.Description = nil
+        } else {
+            var description string
+
+            if err := json.Unmarshal(raw, &description); err != nil {
+                return input, false, domain.ErrValidation
+            }
+
+            description = strings.TrimSpace(description)
+
+            if utf8.RuneCountInString(description) > 2000 {
+                return input, false, domain.ErrValidation
+            }
+
+            input.Description = &description
+        }
+    }
+
+    if input.Name == nil && !descriptionSet {
+        return input, false, domain.ErrValidation
+    }
+
+    return input, descriptionSet, nil
 }
 
 type CursorRequest struct {

@@ -20,10 +20,12 @@ type fakeRepository struct {
 func (f *fakeRepository) GetProfile(context.Context, int) (*domain.User, error) {
 	return f.user, f.getErr
 }
+
 func (f *fakeRepository) UpdateProfile(_ context.Context, _ int, in *domain.UpdateProfileInput) (*domain.User, error) {
 	f.gotUpdate = in
 	return f.user, f.updateErr
 }
+
 func (f *fakeRepository) DeleteProfile(context.Context, int) error {
 	f.deleted = true
 	return f.deleteErr
@@ -35,6 +37,7 @@ func TestGetProfileValidatesID(t *testing.T) {
 		t.Fatalf("expected validation error, got %v", err)
 	}
 }
+
 func TestUpdateProfileTrimsFields(t *testing.T) {
 	name := "  Alex "
 	tag := " alex "
@@ -48,13 +51,15 @@ func TestUpdateProfileTrimsFields(t *testing.T) {
 		t.Fatalf("fields not normalized: %#v", repo.gotUpdate)
 	}
 }
+
 func TestUpdateProfileRejectsEmptyUpdate(t *testing.T) {
 	s := NewService(&fakeRepository{})
 	if _, err := s.UpdateProfile(context.Background(), 4, domain.UpdateProfileInput{}); !errors.Is(err, domain.ErrValidation) {
 		t.Fatalf("expected validation error, got %v", err)
 	}
 }
-func TestDeleteProfileCallsRepository(t *testing.T) {
+
+func TestDeleteProfileCallsRepositoryWithFake(t *testing.T) {
 	repo := &fakeRepository{}
 	s := NewService(repo)
 	if err := s.DeleteProfile(context.Background(), 4); err != nil {
@@ -64,6 +69,7 @@ func TestDeleteProfileCallsRepository(t *testing.T) {
 		t.Fatal("repository was not called")
 	}
 }
+
 func TestGetProfileReturnsRepositoryResult(t *testing.T) {
 	want := &domain.User{ID: 3, CreatedAt: time.Now()}
 	s := NewService(&fakeRepository{user: want})

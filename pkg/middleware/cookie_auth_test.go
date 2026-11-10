@@ -14,6 +14,7 @@ func (m memoryRevocations) Revoke(_ context.Context, id string, _ time.Time) err
 	m[id] = true
 	return nil
 }
+
 func (m memoryRevocations) IsRevoked(_ context.Context, id string) (bool, error) { return m[id], nil }
 
 func TestMiddlewareReadsCookieAndRejectsRevokedToken(t *testing.T) {
