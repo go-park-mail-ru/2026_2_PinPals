@@ -2,7 +2,6 @@ package images
 
 import (
 	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -75,7 +74,9 @@ func (s *Storage) Save(source io.Reader) (string, error) {
 	if _, err := rand.Read(id[:]); err != nil {
 		return "", fmt.Errorf("generate image name: %w", err)
 	}
-	filename := hex.EncodeToString(id[:]) + ext
+	id[6] = (id[6] & 0x0f) | 0x40 // версия 4
+	id[8] = (id[8] & 0x3f) | 0x80 // вариант 10
+	filename := fmt.Sprintf("%x-%x-%x-%x-%x", id[0:4], id[4:6], id[6:8], id[8:10], id[10:16]) + ext
 	if err := os.Rename(tmpName, filepath.Join(s.rootDir, filename)); err != nil {
 		return "", fmt.Errorf("store image: %w", err)
 	}

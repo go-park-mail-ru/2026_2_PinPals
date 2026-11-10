@@ -10,29 +10,52 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const userTagConstraint = "user_user_tag_key"
 
-type queryRower interface {
+// DB exposes only the operation this repository needs and is compatible
+// with pgxmock/v5 for deterministic SQL tests.
+type DB interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
 }
 
-type Repository struct {
-	pool queryRower
-}
+type Repository struct{ pool DB }
 
-func NewRepository(pool *pgxpool.Pool) *Repository {
-	return &Repository{pool: pool}
-}
+func NewRepository(pool DB) *Repository { return &Repository{pool: pool} }
+
+var _ DB = (*pgxpool.Pool)(nil)
 
 const queryGetProfile = `
-	SELECT user_id, name, user_tag, birth_date, description, avatar_url, created_at
+	SELECT user_id, name, user_tag, birth_date, description, avatar_url, created_at, updated_at, deleted_at
 	FROM "user"
-	WHERE user_id = $1
-	  AND deleted_at IS NULL
+	WHERE user_id = $1 AND deleted_at IS NULL
 `
+
+func (r *Repository) GetProfile(ctx context.Context, userID int) (*domain.User, error) {
+	user := &domain.User{}
+	var description, avatarURL pgtype.Text
+
+	err := r.pool.QueryRow(ctx, queryGetProfile, userID).Scan(
+		&user.ID, &user.Name, &user.UserTag, &user.BirthDate,
+		&description, &avatarURL, &user.CreatedAt, &user.UpdatedAt, &user.DeletedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, domain.ErrUserNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	if description.Valid {
+		user.Description = &description.String
+	}
+	if avatarURL.Valid {
+		user.AvatarURL = &avatarURL.String
+	}
+	return user, nil
+}
 
 const queryDeleteProfile = `
 	UPDATE "user"
@@ -41,30 +64,6 @@ const queryDeleteProfile = `
 	  AND deleted_at IS NULL
 	RETURNING user_id
 `
-
-func (r *Repository) GetProfile(ctx context.Context, userID int) (*domain.User, error) {
-	user := &domain.User{}
-
-	err := r.pool.QueryRow(ctx, queryGetProfile, userID).Scan(
-		&user.ID,
-		&user.Name,
-		&user.UserTag,
-		&user.BirthDate,
-		&user.Description,
-		&user.AvatarURL,
-		&user.CreatedAt,
-	)
-
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, domain.ErrUserNotFound
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	return user, nil
-}
 
 func buildUpdateProfileQuery(
 	userID int,
@@ -128,6 +127,7 @@ func (r *Repository) UpdateProfile(
 	input *domain.UpdateProfileInput,
 ) (*domain.User, error) {
 	user := &domain.User{}
+	var description, avatarURL pgtype.Text
 
 	query, args := buildUpdateProfileQuery(userID, input)
 
@@ -136,21 +136,26 @@ func (r *Repository) UpdateProfile(
 		&user.Name,
 		&user.UserTag,
 		&user.BirthDate,
-		&user.Description,
-		&user.AvatarURL,
+		&description,
+		&avatarURL,
 		&user.CreatedAt,
 	)
 
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, domain.ErrUserNotFound
 	}
-
 	if err != nil {
 		if isUserTagUniqueViolation(err) {
 			return nil, domain.ErrUserTagExists
 		}
-
 		return nil, err
+	}
+
+	if description.Valid {
+		user.Description = &description.String
+	}
+	if avatarURL.Valid {
+		user.AvatarURL = &avatarURL.String
 	}
 
 	return user, nil

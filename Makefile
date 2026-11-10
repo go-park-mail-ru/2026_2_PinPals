@@ -40,6 +40,8 @@ down:
 
 generate-mocks:
 	go run go.uber.org/mock/mockgen@v0.6.0 -source=auth_service/usecase/service.go -destination=auth_service/usecase/mocks/mock_user_repository.go -package=mocks
+	go run go.uber.org/mock/mockgen@v0.6.0 -source=user_service/usecase/service.go -destination=user_service/usecase/mocks/mock_user_repository.go -package=mocks
+	go run go.uber.org/mock/mockgen@v0.6.0 -source=pin_service/usecase/service.go -destination=pin_service/usecase/mocks/mock_user_repository.go -package=mocks
 
 cover:
 	@go test -coverprofile=coverage.raw.out ./...

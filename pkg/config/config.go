@@ -164,6 +164,10 @@ func getEnvDuration(key string, fallback time.Duration) time.Duration {
 	return duration
 }
 
+func (c AppConfig) IsProduction() bool {
+	return strings.EqualFold(strings.TrimSpace(c.Env), "production")
+}
+
 func (c AppConfig) SlogLevel() slog.Level {
 	switch strings.ToLower(c.LogLevel) {
 	case "debug":

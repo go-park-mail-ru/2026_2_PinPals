@@ -7,7 +7,7 @@ import (
 
 func TestUpdateProfileRequestToDomain(t *testing.T) {
 	var req UpdateProfileRequest
-	if err := json.Unmarshal([]byte(`{"name":"Alex","user_tag":"alex","description":"hello","avatar_url":null}`), &req); err != nil {
+	if err := json.Unmarshal([]byte(`{"name":"Alex","user_tag":"alex","description":"hello"}`), &req); err != nil {
 		t.Fatal(err)
 	}
 	got, err := req.ToDomain()
@@ -20,8 +20,9 @@ func TestUpdateProfileRequestToDomain(t *testing.T) {
 	if !got.DescriptionSet || got.Description == nil || *got.Description != "hello" {
 		t.Fatalf("description mapping failed: %+v", got)
 	}
-	if !got.AvatarURLSet || got.AvatarURL != nil {
-		t.Fatalf("null avatar mapping failed: %+v", got)
+
+	if got.AvatarURLSet {
+		t.Fatalf("avatar must only be set by the handler from multipart upload: %+v", got)
 	}
 }
 
@@ -37,9 +38,5 @@ func TestUpdateProfileRequestEmptyAndInvalidNullableValues(t *testing.T) {
 	bad := UpdateProfileRequest{Description: json.RawMessage(`{"not":"a string"}`)}
 	if _, err := bad.ToDomain(); err == nil {
 		t.Fatal("expected object description to be rejected")
-	}
-	bad = UpdateProfileRequest{AvatarURL: json.RawMessage(`42`)}
-	if _, err := bad.ToDomain(); err == nil {
-		t.Fatal("expected numeric avatar URL to be rejected")
 	}
 }

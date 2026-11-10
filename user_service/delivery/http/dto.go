@@ -3,35 +3,57 @@ package http
 import (
 	"bytes"
 	"encoding/json"
+	"strings"
 	"time"
+
+	"github.com/go-playground/validator/v10"
 
 	"2026_2_PinPals/user_service/domain"
 )
 
+// UpdateProfileRequest contains only textual profile attributes. Avatar files
+// are uploaded separately as multipart/form-data under the `avatar` field.
 type UpdateProfileRequest struct {
-	Name        *string         `json:"name"`
-	UserTag     *string         `json:"user_tag"`
+	Name        *string         `json:"name" validate:"omitempty,min=1,max=255"`
+	UserTag     *string         `json:"user_tag" validate:"omitempty,min=1,max=64"`
 	Description json.RawMessage `json:"description"`
-	AvatarURL   json.RawMessage `json:"avatar_url"`
+}
+
+func (r UpdateProfileRequest) Validate(v *validator.Validate) error {
+	if err := v.Struct(r); err != nil {
+		return err
+	}
+	if r.Name != nil && strings.TrimSpace(*r.Name) == "" {
+		return domain.ErrValidation
+	}
+	if r.UserTag != nil && strings.TrimSpace(*r.UserTag) == "" {
+		return domain.ErrValidation
+	}
+	if len(r.Description) > 0 {
+		value, err := decodeNullableString(r.Description)
+		if err != nil {
+			return err
+		}
+		if value != nil && len(*value) > 5000 {
+			return domain.ErrValidation
+		}
+	}
+	return nil
+}
+
+func (r UpdateProfileRequest) HasChanges() bool {
+	return r.Name != nil || r.UserTag != nil || len(r.Description) > 0
 }
 
 func (r UpdateProfileRequest) ToDomain() (domain.UpdateProfileInput, error) {
 	input := domain.UpdateProfileInput{Name: r.Name, UserTag: r.UserTag}
 	if len(r.Description) > 0 {
 		input.DescriptionSet = true
-		v, err := decodeNullableString(r.Description)
+		value, err := decodeNullableString(r.Description)
 		if err != nil {
 			return input, err
 		}
-		input.Description = v
-	}
-	if len(r.AvatarURL) > 0 {
-		input.AvatarURLSet = true
-		v, err := decodeNullableString(r.AvatarURL)
-		if err != nil {
-			return input, err
-		}
-		input.AvatarURL = v
+		input.Description = value
 	}
 	return input, nil
 }

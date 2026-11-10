@@ -7,6 +7,9 @@ import (
 	"net/http"
 	"time"
 
+	"2026_2_PinPals/pkg/images"
+	"github.com/go-playground/validator/v10"
+
 	_ "2026_2_PinPals/docs/user"
 	"2026_2_PinPals/pkg/config"
 	"2026_2_PinPals/pkg/middleware"
@@ -40,12 +43,18 @@ func RegisterRoutes(cfg *config.Config, logger *slog.Logger, pool *pgxpool.Pool,
 	tokens.SetRevocationStore(middleware.NewPostgresTokenStore(pool))
 	repo := repository.NewRepository(pool)
 	service := usecase.NewService(repo)
-	handler := httphandler.NewHandler(service)
+	handler := httphandler.NewHandler(service, httphandler.HandlerOptions{
+		Validator:    validator.New(),
+		Storage:      images.NewStorage(cfg.App.ImageDir),
+		ImageBaseURL: cfg.App.BaseURL,
+	})
 	access := middleware.Access(tokens)
 	mux.Handle("GET /api/v1/users/me", access(http.HandlerFunc(handler.GetMe)))
 	mux.Handle("PATCH /api/v1/users/me", middleware.CSRF(access(http.HandlerFunc(handler.UpdateMe))))
 	mux.Handle("DELETE /api/v1/users/me", middleware.CSRF(access(http.HandlerFunc(handler.DeleteMe))))
-	mux.Handle("GET /swagger/", httpSwagger.Handler(httpSwagger.URL("/swagger/doc.json")))
+	if !cfg.App.IsProduction() {
+		mux.Handle("GET /swagger/", httpSwagger.Handler(httpSwagger.URL("/swagger/doc.json")))
+	}
 }
 
 func Run(ctx context.Context) error { return server.Run(ctx, SetupPostgres, RegisterRoutes) }
