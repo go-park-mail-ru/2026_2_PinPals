@@ -13,6 +13,7 @@ on:
       - 'go.mod'
       - 'go.sum'
       - '.github/workflows/openapi.yml'
+      - 'site/**'
   pull_request:
     branches: [develop, RK2_combined]
     paths:
@@ -25,6 +26,7 @@ on:
       - 'go.mod'
       - 'go.sum'
       - '.github/workflows/openapi.yml'
+      - 'site/**'
   workflow_dispatch:
 
 permissions:
@@ -61,34 +63,53 @@ jobs:
             fi
           done
 
-      - name: Prepare documentation site
+
+      - name: Prepare Swagger UI site
         run: |
           mkdir -p site
-          for entry in "auth:Auth service" "pin:Pin service" "user:User service"; do
-            spec="${entry%%:*}"
-            label="${entry#*:}"
+          test -s site/index.html
+
+          for spec in auth pin user; do
             if [ -f "docs/${spec}/swagger.yaml" ]; then
               mkdir -p "site/${spec}"
               cp "docs/${spec}/swagger.yaml" "site/${spec}/openapi.yaml"
-              printf '<li><a href="%s/openapi.yaml">%s</a></li>\n' "${spec}" "${label}" >> site/service-links.html
-            fi
-          done
-          cat > site/index.html <<'HTML'
+
+              cat > "site/${spec}/index.html" <<'HTML'
           <!doctype html>
           <html lang="ru">
-          <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PinPals API</title></head>
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <title>PinPals API — Swagger UI</title>
+            <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.34.1/swagger-ui.css">
+          </head>
           <body>
-            <h1>PinPals API — OpenAPI</h1>
-            <ul id="services"></ul>
+            <div id="swagger-ui"></div>
+
+            <script src="https://unpkg.com/swagger-ui-dist@5.34.1/swagger-ui-bundle.js" crossorigin></script>
+            <script src="https://unpkg.com/swagger-ui-dist@5.34.1/swagger-ui-standalone-preset.js" crossorigin></script>
+
             <script>
-              fetch('service-links.html').then(r => r.text()).then(html => {
-                document.getElementById('services').innerHTML = html;
-              });
+              window.onload = function () {
+                window.ui = SwaggerUIBundle({
+                  url: "./openapi.yaml",
+                  dom_id: "#swagger-ui",
+                  deepLinking: true,
+                  displayRequestDuration: true,
+                  presets: [
+                    SwaggerUIBundle.presets.apis,
+                    SwaggerUIStandalonePreset
+                  ],
+                  layout: "StandaloneLayout"
+                });
+              };
             </script>
           </body>
           </html>
           HTML
-          test -s site/service-links.html
+            fi
+          done
+
 
       - name: Upload specifications as workflow artifact
         uses: actions/upload-artifact@v4

@@ -6,6 +6,8 @@
 // @in header
 // @name Cookie
 // @description Браузер автоматически отправляет cookie access_token. Для изменяющих состояние запросов требуется X-CSRF-Token с тем же значением, что и cookie csrf_token.
+// @host <АДРЕС_ТВОЕГО_BACKEND>
+// @schemes https
 package main
 
 import (
