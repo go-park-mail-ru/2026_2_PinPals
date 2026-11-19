@@ -400,16 +400,63 @@ func TestRepositoryDeskQueries(t *testing.T) {
 		assertMockExpectations(t, mock)
 	})
 
-	t.Run("first pin success and missing", func(t *testing.T) {
+	t.Run("first pins returns up to limit, fewer, and none", func(t *testing.T) {
 		repo, mock := newMockRepository(t)
-		mock.ExpectQuery(queryGetFirstPinFromDesk).WithArgs(21).WillReturnRows(deskPinRows(11, 7, "beach.jpg", "Beach"))
-		got, err := repo.GetFirstPin(context.Background(), 21)
-		if err != nil || got.ID != 11 {
-			t.Fatalf("GetFirstPin() = %+v, %v", got, err)
+
+		three := deskPinRows(11, 7, "a.jpg", "A")
+		three.AddRow(12, 7, "b.jpg", "B", nil, testPinCreatedAt, testPinCreatedAt, nil)
+		three.AddRow(13, 7, "c.jpg", "C", nil, testPinCreatedAt, testPinCreatedAt, nil)
+		mock.ExpectQuery(queryGetFirstPinsFromDesk).WithArgs(21, 3).WillReturnRows(three)
+		got, err := repo.GetFirstPins(context.Background(), 21, 3)
+		if err != nil || len(got) != 3 || got[0].ID != 11 || got[2].ID != 13 {
+			t.Fatalf("GetFirstPins(3) = %+v, %v", got, err)
 		}
-		mock.ExpectQuery(queryGetFirstPinFromDesk).WithArgs(22).WillReturnError(pgx.ErrNoRows)
-		if _, err := repo.GetFirstPin(context.Background(), 22); !errors.Is(err, domain.ErrPinNotFound) {
-			t.Fatalf("GetFirstPin missing error = %v", err)
+
+		mock.ExpectQuery(queryGetFirstPinsFromDesk).WithArgs(22, 3).WillReturnRows(deskPinRows(14, 7, "d.jpg", "D"))
+		got, err = repo.GetFirstPins(context.Background(), 22, 3)
+		if err != nil || len(got) != 1 || got[0].ID != 14 {
+			t.Fatalf("GetFirstPins(1) = %+v, %v", got, err)
+		}
+
+		mock.ExpectQuery(queryGetFirstPinsFromDesk).WithArgs(23, 3).WillReturnRows(pgxmock.NewRows(
+			[]string{"pin_id", "creator_id", "image_url", "name", "description", "created_at", "updated_at", "deleted_at"},
+		))
+		got, err = repo.GetFirstPins(context.Background(), 23, 3)
+		if err != nil || got == nil || len(got) != 0 {
+			t.Fatalf("GetFirstPins(empty) = %#v, %v", got, err)
+		}
+
+		if _, err := repo.GetFirstPins(context.Background(), 21, 0); !errors.Is(err, domain.ErrValidation) {
+			t.Fatalf("GetFirstPins(limit 0) error = %v", err)
+		}
+		assertMockExpectations(t, mock)
+	})
+
+	t.Run("get pin with author success, deleted author and missing", func(t *testing.T) {
+		repo, mock := newMockRepository(t)
+		cols := []string{"pin_id", "creator_id", "image_url", "name", "description", "created_at", "user_id", "name", "user_tag", "avatar_url"}
+
+		authorID, authorName, authorTag, avatar := 7, "Alice", "alice", "ava.png"
+		mock.ExpectQuery(queryGetPinWithAuthorByID).WithArgs(11).WillReturnRows(
+			pgxmock.NewRows(cols).AddRow(11, 7, "beach.jpg", "Beach", nil, testPinCreatedAt, &authorID, &authorName, &authorTag, &avatar),
+		)
+		got, err := repo.GetWithAuthor(context.Background(), 11)
+		if err != nil || got.ID != 11 || got.Author.ID != 7 || got.Author.Name != "Alice" ||
+			got.Author.UserTag != "alice" || got.Author.AvatarURL == nil || *got.Author.AvatarURL != "ava.png" {
+			t.Fatalf("GetWithAuthor() = %+v, %v", got, err)
+		}
+
+		mock.ExpectQuery(queryGetPinWithAuthorByID).WithArgs(12).WillReturnRows(
+			pgxmock.NewRows(cols).AddRow(12, 8, "sea.jpg", "Sea", nil, testPinCreatedAt, nil, nil, nil, nil),
+		)
+		got, err = repo.GetWithAuthor(context.Background(), 12)
+		if err != nil || got.ID != 12 || got.Author.ID != 0 {
+			t.Fatalf("GetWithAuthor(deleted author) = %+v, %v", got, err)
+		}
+
+		mock.ExpectQuery(queryGetPinWithAuthorByID).WithArgs(99).WillReturnError(pgx.ErrNoRows)
+		if _, err := repo.GetWithAuthor(context.Background(), 99); !errors.Is(err, domain.ErrPinNotFound) {
+			t.Fatalf("GetWithAuthor(missing) error = %v", err)
 		}
 		assertMockExpectations(t, mock)
 	})

@@ -18,9 +18,8 @@ func (m memoryRevocations) Revoke(_ context.Context, id string, _ time.Time) err
 func (m memoryRevocations) IsRevoked(_ context.Context, id string) (bool, error) { return m[id], nil }
 
 func TestMiddlewareReadsCookieAndRejectsRevokedToken(t *testing.T) {
-	manager := NewTokenManager([]byte("12345678901234567890123456789012"), 3600)
 	store := memoryRevocations{}
-	manager.SetRevocationStore(store)
+	manager := NewTokenManager([]byte("12345678901234567890123456789012"), 3600, WithRevocationStore(store))
 	token, err := manager.Issue(7)
 	if err != nil {
 		t.Fatal(err)

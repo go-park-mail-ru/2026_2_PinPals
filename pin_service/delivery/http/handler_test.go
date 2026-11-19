@@ -78,6 +78,21 @@ func (f *fakePinRepository) GetByID(
 	return f.getResult, nil
 }
 
+func (f *fakePinRepository) GetWithAuthor(
+	ctx context.Context,
+	id int,
+) (domain.PinWithAuthor, error) {
+	pin, err := f.GetByID(ctx, id)
+	if err != nil {
+		return domain.PinWithAuthor{}, err
+	}
+
+	return domain.PinWithAuthor{
+		Pin:    pin,
+		Author: domain.Author{ID: pin.CreatorID, Name: "Alice", UserTag: "alice"},
+	}, nil
+}
+
 func (f *fakePinRepository) Update(
     _ context.Context,
     _ int,

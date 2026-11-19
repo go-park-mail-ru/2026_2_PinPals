@@ -2,7 +2,7 @@ name: OpenAPI documentation
 
 on:
   push:
-    branches: [develop, RK2_combined]
+    branches: [develop]
     paths:
       - 'auth_service/**'
       - 'pin_service/**'
@@ -15,7 +15,7 @@ on:
       - '.github/workflows/openapi.yml'
       - 'site/**'
   pull_request:
-    branches: [develop, RK2_combined]
+    branches: [develop]
     paths:
       - 'auth_service/**'
       - 'pin_service/**'

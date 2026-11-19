@@ -275,11 +275,20 @@ func TestRepositoryDeskDatabaseErrors(t *testing.T) {
 		assertMockExpectations(t, mock)
 	})
 
-	t.Run("get first pin database error", func(t *testing.T) {
+	t.Run("get first pins database error", func(t *testing.T) {
 		repo, mock := newMockRepository(t)
-		mock.ExpectQuery(queryGetFirstPinFromDesk).WithArgs(21).WillReturnError(wantErr)
-		if _, err := repo.GetFirstPin(ctx, 21); !errors.Is(err, wantErr) {
-			t.Fatalf("GetFirstPin() error = %v", err)
+		mock.ExpectQuery(queryGetFirstPinsFromDesk).WithArgs(21, 3).WillReturnError(wantErr)
+		if _, err := repo.GetFirstPins(ctx, 21, 3); !errors.Is(err, wantErr) {
+			t.Fatalf("GetFirstPins() error = %v", err)
+		}
+		assertMockExpectations(t, mock)
+	})
+
+	t.Run("get pin with author database error", func(t *testing.T) {
+		repo, mock := newMockRepository(t)
+		mock.ExpectQuery(queryGetPinWithAuthorByID).WithArgs(11).WillReturnError(wantErr)
+		if _, err := repo.GetWithAuthor(ctx, 11); !errors.Is(err, wantErr) {
+			t.Fatalf("GetWithAuthor() error = %v", err)
 		}
 		assertMockExpectations(t, mock)
 	})

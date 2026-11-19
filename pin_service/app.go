@@ -42,7 +42,6 @@ func RegisterRoutes(cfg *config.Config, logger *slog.Logger, pool *pgxpool.Pool,
 		[]byte(cfg.Auth.JWTSecret),
 		int64(cfg.Auth.TokenTTL/time.Second),
 	)
-	tokenManager.SetRevocationStore(middleware.NewPostgresTokenStore(pool))
 
 	pinRepository := repository.NewRepository(pool)
 	pinService := usecase.NewService(pinRepository)
@@ -59,8 +58,8 @@ func RegisterRoutes(cfg *config.Config, logger *slog.Logger, pool *pgxpool.Pool,
 	mux.Handle("PATCH /api/v1/pins/{pinID}", middleware.CSRF(middleware.Access(tokenManager)(http.HandlerFunc(pinHandler.Update))))
 
 	mux.Handle("DELETE /api/v1/pins/{pinID}", middleware.CSRF(middleware.Access(tokenManager)(http.HandlerFunc(pinHandler.Delete))))
-	deskService := usecase.NewDeskService(pinRepository)
-	deskHandler := httphandler.NewDeskHandler(deskService, cfg.App.BaseURL, images.NewStorage(cfg.App.ImageDir))
+	deskService := usecase.NewDeskService(pinRepository, images.NewStorage(cfg.App.ImageDir))
+	deskHandler := httphandler.NewDeskHandler(deskService, cfg.App.BaseURL)
 	mux.Handle("POST /api/v1/desks", middleware.CSRF(middleware.Access(tokenManager)(http.HandlerFunc(deskHandler.Create))))
 	mux.Handle("GET /api/v1/desks/me", middleware.Access(tokenManager)(http.HandlerFunc(deskHandler.ListOwn)))
 	mux.HandleFunc("GET /api/v1/users/{userID}/desks", deskHandler.ListPublic)
@@ -75,6 +74,7 @@ func RegisterRoutes(cfg *config.Config, logger *slog.Logger, pool *pgxpool.Pool,
 	mux.Handle("DELETE /api/v1/pins/{pinID}/like", middleware.CSRF(middleware.Access(tokenManager)(http.HandlerFunc(likeHandler.Remove))))
 	mux.Handle("GET /api/v1/pins/{pinID}/likes", middleware.OptionalAccess(tokenManager)(http.HandlerFunc(likeHandler.GetStats)))
 	mux.HandleFunc("GET /images/{filename}", imageHandler.Get)
+	mux.Handle("GET /api/v1/desks/{deskID}/pins/preview", middleware.OptionalAccess(tokenManager)(http.HandlerFunc(deskHandler.GetFirstPins)))
 }
 
 func Run(ctx context.Context) error {

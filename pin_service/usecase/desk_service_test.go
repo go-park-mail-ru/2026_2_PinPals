@@ -22,7 +22,7 @@ func TestDeskCreateNormalizesName(t *testing.T) {
 			return domain.Desk{ID: 1, CreatorID: userID, Name: input.Name}, nil
 		},
 	)
-	got, err := NewDeskService(repo).Create(context.Background(), 5, domain.CreateDeskInput{Name: "  Art  ", EntryStatus: domain.EntryStatusPublic})
+	got, err := NewDeskService(repo, nil).Create(context.Background(), 5, domain.CreateDeskInput{Name: "  Art  ", EntryStatus: domain.EntryStatusPublic})
 	if err != nil || got.Name != "Art" {
 		t.Fatalf("desk=%+v err=%v", got, err)
 	}
@@ -32,7 +32,7 @@ func TestDeskGetProtectsPrivateDesk(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repo := repomocks.NewMockDeskRepository(ctrl)
 	repo.EXPECT().GetDeskByID(gomock.Any(), 1).Return(domain.Desk{ID: 1, CreatorID: 10, EntryStatus: domain.EntryStatusPrivate}, nil)
-	_, err := NewDeskService(repo).GetWithPins(context.Background(), 11, 1)
+	_, err := NewDeskService(repo, nil).GetWithPins(context.Background(), 11, 1)
 	if !errors.Is(err, domain.ErrDeskForbidden) {
 		t.Fatalf("expected forbidden, got %v", err)
 	}
@@ -44,7 +44,7 @@ func TestDeskUpdateAndDeleteRequireOwner(t *testing.T) {
 		repo := repomocks.NewMockDeskRepository(ctrl)
 		repo.EXPECT().GetDeskByID(gomock.Any(), 1).Return(domain.Desk{ID: 1, CreatorID: 10}, nil)
 		name := "New"
-		_, err := NewDeskService(repo).Update(context.Background(), 11, 1, domain.UpdateDeskInput{Name: &name})
+		_, err := NewDeskService(repo, nil).Update(context.Background(), 11, 1, domain.UpdateDeskInput{Name: &name})
 		if !errors.Is(err, domain.ErrDeskForbidden) {
 			t.Fatalf("expected forbidden, got %v", err)
 		}
@@ -53,7 +53,7 @@ func TestDeskUpdateAndDeleteRequireOwner(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		repo := repomocks.NewMockDeskRepository(ctrl)
 		repo.EXPECT().GetDeskByID(gomock.Any(), 1).Return(domain.Desk{ID: 1, CreatorID: 10}, nil)
-		if err := NewDeskService(repo).Delete(context.Background(), 11, 1); !errors.Is(err, domain.ErrDeskForbidden) {
+		if err := NewDeskService(repo,nil).Delete(context.Background(), 11, 1); !errors.Is(err, domain.ErrDeskForbidden) {
 			t.Fatalf("expected forbidden, got %v", err)
 		}
 	})
@@ -65,13 +65,13 @@ func TestDeskGetPublic(t *testing.T) {
 	desk := domain.Desk{ID: 1, CreatorID: 10, EntryStatus: domain.EntryStatusPublic}
 	repo.EXPECT().GetDeskByID(gomock.Any(), 1).Return(desk, nil)
 	repo.EXPECT().GetDeskWithPins(gomock.Any(), 1).Return(domain.DeskWithPins{Desk: desk}, nil)
-	if _, err := NewDeskService(repo).GetWithPins(context.Background(), 0, 1); err != nil {
+	if _, err := NewDeskService(repo,nil).GetWithPins(context.Background(), 0, 1); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestDeskServiceRejectsInvalidInputsBeforeRepositoryCall(t *testing.T) {
-	s := NewDeskService(nil)
+	s := NewDeskService(nil,nil)
 	if _, err := s.Create(context.Background(), 0, domain.CreateDeskInput{}); !errors.Is(err, domain.ErrValidation) {
 		t.Fatalf("create: %v", err)
 	}
@@ -109,7 +109,7 @@ func TestDeskServicePropagatesRepositoryErrors(t *testing.T) {
 	repo := repomocks.NewMockDeskRepository(ctrl)
 	wantErr := errors.New("database unavailable")
 	repo.EXPECT().ListOwn(gomock.Any(), 7).Return(nil, wantErr)
-	if _, err := NewDeskService(repo).ListOwn(context.Background(), 7); !errors.Is(err, wantErr) {
+	if _, err := NewDeskService(repo,nil).ListOwn(context.Background(), 7); !errors.Is(err, wantErr) {
 		t.Fatalf("error=%v", err)
 	}
 }

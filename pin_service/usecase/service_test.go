@@ -67,24 +67,39 @@ func (f *fakePinRepository) GetByID(
 	return f.getResult, nil
 }
 
-func (f *fakePinRepository) Update(
-    _ context.Context,
-    _ int,
-    _ domain.UpdatePinInput,
-    _ bool,
-) (domain.Pin, error) {
-    if f.updateErr != nil {
-        return domain.Pin{}, f.updateErr
-    }
+func (f *fakePinRepository) GetWithAuthor(
+	ctx context.Context,
+	id int,
+) (domain.PinWithAuthor, error) {
+	pin, err := f.GetByID(ctx, id)
+	if err != nil {
+		return domain.PinWithAuthor{}, err
+	}
 
-    return f.updateResult, nil
+	return domain.PinWithAuthor{
+		Pin:    pin,
+		Author: domain.Author{ID: pin.CreatorID, Name: "Alice", UserTag: "alice"},
+	}, nil
+}
+
+func (f *fakePinRepository) Update(
+	_ context.Context,
+	_ int,
+	_ domain.UpdatePinInput,
+	_ bool,
+) (domain.Pin, error) {
+	if f.updateErr != nil {
+		return domain.Pin{}, f.updateErr
+	}
+
+	return f.updateResult, nil
 }
 
 func (f *fakePinRepository) Delete(
-    _ context.Context,
-    _ int,
+	_ context.Context,
+	_ int,
 ) error {
-    return f.deleteErr
+	return f.deleteErr
 }
 
 func TestCreatePin(t *testing.T) {

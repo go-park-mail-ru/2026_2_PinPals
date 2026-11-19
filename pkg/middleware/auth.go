@@ -40,11 +40,19 @@ type TokenManager struct {
 	store  RevocationStore
 }
 
-func NewTokenManager(secret []byte, ttlSeconds int64) *TokenManager {
-	return &TokenManager{secret: secret, ttl: ttlSeconds}
+type TokenManagerOption func(*TokenManager)
+
+func WithRevocationStore(store RevocationStore) TokenManagerOption {
+	return func(tm *TokenManager) { tm.store = store }
 }
 
-func (tm *TokenManager) SetRevocationStore(store RevocationStore) { tm.store = store }
+func NewTokenManager(secret []byte, ttlSeconds int64, opts ...TokenManagerOption) *TokenManager {
+	tm := &TokenManager{secret: secret, ttl: ttlSeconds}
+	for _, opt := range opts {
+		opt(tm)
+	}
+	return tm
+}
 
 type Claims struct {
 	UserID int `json:"user_id"`

@@ -21,8 +21,11 @@ func (s userStatusStore) IsUserDeleted(_ context.Context, id int) (bool, error) 
 }
 
 func TestMiddlewareRejectsTokenOfDeletedUser(t *testing.T) {
-	manager := NewTokenManager([]byte("01234567890123456789012345678901"), int64(time.Hour/time.Second))
-	manager.SetRevocationStore(userStatusStore{deleted: map[int]bool{7: true}})
+	manager := NewTokenManager(
+		[]byte("01234567890123456789012345678901"),
+		int64(time.Hour/time.Second),
+		WithRevocationStore(userStatusStore{deleted: map[int]bool{7: true}}),
+	)
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
 
 	for _, tc := range []struct {

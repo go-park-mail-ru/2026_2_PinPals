@@ -1,6 +1,9 @@
 package domain
 
-import "time"
+import (
+	"io"
+	"time"
+)
 
 type Pin struct {
 	ID          int
@@ -11,6 +14,18 @@ type Pin struct {
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	DeletedAt   *time.Time
+}
+
+type Author struct {
+	ID        int
+	Name      string
+	UserTag   string
+	AvatarURL *string
+}
+
+type PinWithAuthor struct {
+	Pin
+	Author Author
 }
 
 type CreatePinInput struct {
@@ -53,11 +68,14 @@ type DeskWithPins struct {
 	Pins []Pin
 }
 
+const DeskPreviewPinsLimit = 3
+
 type CreateDeskInput struct {
 	Name         string
 	Description  *string
 	EntryStatus  int16
 	AvatarImgURL *string
+	Avatar       io.Reader
 }
 
 type UpdateDeskInput struct {
@@ -67,6 +85,7 @@ type UpdateDeskInput struct {
 	EntryStatus     *int16
 	AvatarImgURL    *string
 	AvatarImgURLSet bool
+	Avatar          io.Reader
 }
 
 type LikeStats struct {

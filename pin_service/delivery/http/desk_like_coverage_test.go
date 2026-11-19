@@ -67,6 +67,12 @@ func (s *coverageDeskService) GetWithPins(_ context.Context, userID, deskID int)
 	return s.withPins, s.err("get")
 }
 
+func (s *coverageDeskService) GetFirstPins(_ context.Context, userID, deskID int) ([]domain.Pin, error) {
+	s.record("first-pins")
+	s.userID, s.deskID = userID, deskID
+	return s.withPins.Pins, s.err("first-pins")
+}
+
 func (s *coverageDeskService) Update(_ context.Context, userID, deskID int, input domain.UpdateDeskInput) (domain.Desk, error) {
 	s.record("update")
 	s.userID, s.deskID, s.updateInput = userID, deskID, input
@@ -346,11 +352,11 @@ func TestDeskDTOAndResponseCoverage(t *testing.T) {
 
 	desk := domain.Desk{ID: 3, CreatorID: 5, Name: "Art", AvatarImgURL: stringPtr("cover.jpg")}
 	pins := []domain.Pin{{ID: 8, ImageURL: "pin.jpg", Name: "Beach"}}
-	resp := NewDeskHandler(&coverageDeskService{}, "https://cdn.example").response(desk, pins)
+	resp := DeskResponseFromDomain(desk, pins, "https://cdn.example")
 	if resp.AvatarImgURL == nil || *resp.AvatarImgURL != "https://cdn.example/images/cover.jpg" || len(resp.Pins) != 1 || resp.Pins[0].ImageURL != "https://cdn.example/images/pin.jpg" {
 		t.Fatalf("unexpected response mapping: %+v", resp)
 	}
-	withoutURL := NewDeskHandler(&coverageDeskService{}, "").response(desk, nil)
+	withoutURL := DeskResponseFromDomain(desk, nil, "")
 	if withoutURL.AvatarImgURL == nil || *withoutURL.AvatarImgURL != "/images/cover.jpg" || withoutURL.Pins != nil {
 		t.Fatalf("unexpected no-base-url response: %+v", withoutURL)
 	}

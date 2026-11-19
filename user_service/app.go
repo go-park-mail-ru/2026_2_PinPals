@@ -37,7 +37,6 @@ func SetupPostgres(ctx context.Context, cfg *config.Config, logger *slog.Logger)
 
 func RegisterRoutes(cfg *config.Config, logger *slog.Logger, pool *pgxpool.Pool, mux *http.ServeMux) {
 	tokens := middleware.NewTokenManager([]byte(cfg.Auth.JWTSecret), int64(cfg.Auth.TokenTTL/time.Second))
-	tokens.SetRevocationStore(middleware.NewPostgresTokenStore(pool))
 	repo := repository.NewRepository(pool)
 	service := usecase.NewService(repo)
 	handler := httphandler.NewHandler(service, httphandler.HandlerOptions{
