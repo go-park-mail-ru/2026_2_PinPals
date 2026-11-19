@@ -48,6 +48,11 @@ type PinRepository interface {
 		id int,
 	) (domain.Pin, error)
 
+	GetWithAuthor(
+		ctx context.Context,
+		id int,
+	) (domain.PinWithAuthor, error)
+
 	Update(
 		ctx context.Context,
 		pinID int,
@@ -114,14 +119,12 @@ func (s *Service) List(ctx context.Context, limit int, cursor *domain.Cursor) (d
 	return page, nil
 }
 
-func (s *Service) GetByID(ctx context.Context, id int) (domain.Pin, error) {
+func (s *Service) GetByID(ctx context.Context, id int) (domain.PinWithAuthor, error) {
 	if id < 1 {
-		return domain.Pin{}, domain.ErrValidation
+		return domain.PinWithAuthor{}, domain.ErrValidation
 	}
-	return s.repository.GetByID(ctx, id)
+	return s.repository.GetWithAuthor(ctx, id)
 }
-
-
 
 func (s *Service) Update(
     ctx context.Context,

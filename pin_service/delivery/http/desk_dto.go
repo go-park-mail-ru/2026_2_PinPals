@@ -4,10 +4,43 @@ import (
 	"bytes"
 	"encoding/json"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"2026_2_PinPals/pin_service/domain"
+	"2026_2_PinPals/pkg/images"
 )
+
+type DeskResponse struct {
+	ID           int           `json:"desk_id"`
+	CreatorID    int           `json:"creator_id"`
+	Name         string        `json:"name"`
+	Description  *string       `json:"description,omitempty"`
+	AvatarImgURL *string       `json:"avatar_img_url,omitempty"`
+	EntryStatus  int16         `json:"entry_status"`
+	CreatedAt    time.Time     `json:"created_at"`
+	Pins         []PinResponse `json:"pins,omitempty"`
+}
+
+func DeskResponseFromDomain(d domain.Desk, pins []domain.Pin, baseURL string) DeskResponse {
+	avatarURL := d.AvatarImgURL
+	if avatarURL != nil {
+		publicURL := images.PublicURL(baseURL, *avatarURL)
+		avatarURL = &publicURL
+	}
+	out := DeskResponse{
+		ID: d.ID, CreatorID: d.CreatorID, Name: d.Name,
+		Description: d.Description, AvatarImgURL: avatarURL,
+		EntryStatus: d.EntryStatus, CreatedAt: d.CreatedAt,
+	}
+	if pins != nil {
+		out.Pins = make([]PinResponse, len(pins))
+		for i, pin := range pins {
+			out.Pins[i] = PinResponseFromDomain(pin, baseURL)
+		}
+	}
+	return out
+}
 
 // Avatar images are uploaded as multipart files. A client may remove an
 // existing avatar, but may not assign an arbitrary URL to this field.
@@ -94,4 +127,16 @@ func decodeDeskNullableString(raw json.RawMessage) (*string, error) {
 		return nil, err
 	}
 	return &value, nil
+}
+
+type DeskPreviewResponse struct {
+	Pins []PinResponse `json:"pins"`
+}
+
+func DeskPreviewResponseFromDomain(pins []domain.Pin, baseURL string) DeskPreviewResponse {
+	out := DeskPreviewResponse{Pins: make([]PinResponse, len(pins))}
+	for i, pin := range pins {
+		out.Pins[i] = PinResponseFromDomain(pin, baseURL)
+	}
+	return out
 }

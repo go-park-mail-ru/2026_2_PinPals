@@ -271,7 +271,7 @@ const queryRemovePinFromDesk = `
 	RETURNING pdr.desk_relation_id
 `
 
-const queryGetFirstPinFromDesk = `
+const queryGetFirstPinsFromDesk = `
 	SELECT
 		p.pin_id, p.creator_id, p.image_url, p.name,
 		p.description, p.created_at, p.updated_at, p.deleted_at
@@ -282,7 +282,7 @@ const queryGetFirstPinFromDesk = `
 	  AND d.deleted_at IS NULL
 	  AND p.deleted_at IS NULL
 	ORDER BY pdr.created_at ASC, p.pin_id ASC
-	LIMIT 1
+	LIMIT $2
 `
 
 const queryGetDeskPins = `
@@ -303,6 +303,19 @@ const queryDeskOwnedBy = `
 		  AND creator_id = $2
 		  AND deleted_at IS NULL
 	)
+`
+
+const queryGetPinWithAuthorByID = `
+	SELECT
+		p.pin_id, p.creator_id, p.image_url, p.name, p.description,
+		p.created_at,
+		u.user_id, u.name, u.user_tag, u.avatar_url
+	FROM pin AS p
+	LEFT JOIN "user" AS u
+		ON u.user_id = p.creator_id
+	   AND u.deleted_at IS NULL
+	WHERE p.pin_id = $1
+	  AND p.deleted_at IS NULL
 `
 
 func (r *Repository) Create(
@@ -491,6 +504,49 @@ func (r *Repository) GetByID(
 	}
 
 	return pin, nil
+}
+
+func (r *Repository) GetWithAuthor(
+	ctx context.Context,
+	pinID int,
+) (domain.PinWithAuthor, error) {
+	var (
+		result       domain.PinWithAuthor
+		authorID     *int
+		authorName   *string
+		authorTag    *string
+		authorAvatar *string
+	)
+
+	err := r.pool.QueryRow(ctx, queryGetPinWithAuthorByID, pinID).Scan(
+		&result.ID,
+		&result.CreatorID,
+		&result.ImageURL,
+		&result.Name,
+		&result.Description,
+		&result.CreatedAt,
+		&authorID,
+		&authorName,
+		&authorTag,
+		&authorAvatar,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.PinWithAuthor{}, domain.ErrPinNotFound
+	}
+	if err != nil {
+		return domain.PinWithAuthor{}, err
+	}
+
+	if authorID != nil && authorName != nil && authorTag != nil {
+		result.Author = domain.Author{
+			ID:        *authorID,
+			Name:      *authorName,
+			UserTag:   *authorTag,
+			AvatarURL: authorAvatar,
+		}
+	}
+
+	return result, nil
 }
 
 func (r *Repository) SearchTags(
@@ -864,19 +920,35 @@ func (r *Repository) RemovePin(
 	return err
 }
 
-func (r *Repository) GetFirstPin(
+func (r *Repository) GetFirstPins(
 	ctx context.Context,
 	deskID int,
-) (domain.Pin, error) {
-	pin, err := scanPin(r.pool.QueryRow(ctx, queryGetFirstPinFromDesk, deskID))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return domain.Pin{}, domain.ErrPinNotFound
-	}
-	if err != nil {
-		return domain.Pin{}, err
+	limit int,
+) ([]domain.Pin, error) {
+	if limit < 1 {
+		return nil, domain.ErrValidation
 	}
 
-	return pin, nil
+	rows, err := r.pool.Query(ctx, queryGetFirstPinsFromDesk, deskID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	pins := make([]domain.Pin, 0, limit)
+	for rows.Next() {
+		pin, err := scanPin(rows)
+		if err != nil {
+			return nil, err
+		}
+		pins = append(pins, pin)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return pins, nil
 }
 
 func (r *Repository) RemoveLike(ctx context.Context, userID, pinID int) error {

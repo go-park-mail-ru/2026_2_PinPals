@@ -33,7 +33,7 @@ type PinService interface {
 	GetByID(
 		ctx context.Context,
 		id int,
-	) (domain.Pin, error)
+	) (domain.PinWithAuthor, error)
 
 	Update(
 		ctx context.Context,
@@ -171,7 +171,7 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpx.WriteJSON(w, http.StatusOK, PinResponseFromDomain(pin, h.baseURL))
+	httpx.WriteJSON(w, http.StatusOK, PinWithAuthorResponseFromDomain(pin, h.baseURL))
 }
 
 // Create godoc

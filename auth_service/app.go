@@ -41,7 +41,6 @@ func RegisterRoutes(cfg *config.Config, logger *slog.Logger, pool *pgxpool.Pool,
 		[]byte(cfg.Auth.JWTSecret),
 		int64(cfg.Auth.TokenTTL/time.Second),
 	)
-	tokenManager.SetRevocationStore(middleware.NewPostgresTokenStore(pool))
 
 	authRepository := repository.NewRepository(pool)
 	authService := usecase.NewService(authRepository)

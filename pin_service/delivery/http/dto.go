@@ -9,6 +9,7 @@ import (
     "unicode/utf8"
 
     "2026_2_PinPals/pin_service/domain"
+	"2026_2_PinPals/pkg/images"
 )
 
 type CreatePinRequest struct {
@@ -103,13 +104,21 @@ func (r ListRequest) ToDomain() (int, *domain.Cursor) {
 	return limit, cursor
 }
 
+type AuthorResponse struct {
+	ID        int     `json:"user_id"`
+	Name      string  `json:"name"`
+	UserTag   string  `json:"user_tag"`
+	AvatarURL *string `json:"avatar_url,omitempty"`
+}
+
 type PinResponse struct {
-	ID          int       `json:"pin_id"`
-	CreatorID   int       `json:"creator_id"`
-	ImageURL    string    `json:"image_url"`
-	Name        string    `json:"name"`
-	Description *string   `json:"description,omitempty"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID          int             `json:"pin_id"`
+	CreatorID   int             `json:"creator_id"`
+	ImageURL    string          `json:"image_url"`
+	Name        string          `json:"name"`
+	Description *string         `json:"description,omitempty"`
+	CreatedAt   time.Time       `json:"created_at"`
+	Author      *AuthorResponse `json:"author,omitempty"`
 }
 
 func PinResponseFromDomain(p domain.Pin, baseURL string) PinResponse {
@@ -123,6 +132,24 @@ func PinResponseFromDomain(p domain.Pin, baseURL string) PinResponse {
 type CursorResponse struct {
 	CreatedAt time.Time `json:"created_at"`
 	ID        int       `json:"id"`
+}
+
+func PinWithAuthorResponseFromDomain(p domain.PinWithAuthor, baseURL string) PinResponse {
+	resp := PinResponseFromDomain(p.Pin, baseURL)
+	if p.Author.ID < 1 {
+		return resp
+	}
+	author := &AuthorResponse{
+		ID:      p.Author.ID,
+		Name:    p.Author.Name,
+		UserTag: p.Author.UserTag,
+	}
+	if p.Author.AvatarURL != nil {
+		avatarURL := images.PublicURL(baseURL, *p.Author.AvatarURL)
+		author.AvatarURL = &avatarURL
+	}
+	resp.Author = author
+	return resp
 }
 
 func CursorResponseFromDomain(c domain.Cursor) CursorResponse {

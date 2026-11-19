@@ -4,13 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"mime"
 	"mime/multipart"
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"2026_2_PinPals/pin_service/domain"
 	"2026_2_PinPals/pkg/httpx"
@@ -27,56 +25,16 @@ type DeskService interface {
 	Delete(context.Context, int, int) error
 	AddPin(context.Context, int, int, int) error
 	RemovePin(context.Context, int, int, int) error
-}
-
-type DeskImageStorage interface {
-	Save(io.Reader) (string, error)
-	Delete(string) error
+	GetFirstPins(context.Context, int, int) ([]domain.Pin, error)
 }
 
 type DeskHandler struct {
-	service      DeskService
-	baseURL      string
-	imageStorage DeskImageStorage
+	service DeskService
+	baseURL string
 }
 
-func NewDeskHandler(service DeskService, baseURL string, storage ...DeskImageStorage) *DeskHandler {
-	h := &DeskHandler{service: service, baseURL: baseURL}
-	if len(storage) > 0 {
-		h.imageStorage = storage[0]
-	}
-	return h
-}
-
-type DeskResponse struct {
-	ID           int           `json:"desk_id"`
-	CreatorID    int           `json:"creator_id"`
-	Name         string        `json:"name"`
-	Description  *string       `json:"description,omitempty"`
-	AvatarImgURL *string       `json:"avatar_img_url,omitempty"`
-	EntryStatus  int16         `json:"entry_status"`
-	CreatedAt    time.Time     `json:"created_at"`
-	Pins         []PinResponse `json:"pins,omitempty"`
-}
-
-func (h *DeskHandler) response(d domain.Desk, pins []domain.Pin) DeskResponse {
-	avatarURL := d.AvatarImgURL
-	if avatarURL != nil {
-		publicURL := images.PublicURL(h.baseURL, *avatarURL)
-		avatarURL = &publicURL
-	}
-	out := DeskResponse{
-		ID: d.ID, CreatorID: d.CreatorID, Name: d.Name,
-		Description: d.Description, AvatarImgURL: avatarURL,
-		EntryStatus: d.EntryStatus, CreatedAt: d.CreatedAt,
-	}
-	if pins != nil {
-		out.Pins = make([]PinResponse, len(pins))
-		for i, pin := range pins {
-			out.Pins[i] = PinResponseFromDomain(pin, h.baseURL)
-		}
-	}
-	return out
+func NewDeskHandler(service DeskService, baseURL string) *DeskHandler {
+	return &DeskHandler{service: service, baseURL: baseURL}
 }
 
 func requestMediaType(r *http.Request) (string, error) {
@@ -128,38 +86,17 @@ func (h *DeskHandler) parseMultipart(
 	return values, avatar, true
 }
 
-func (h *DeskHandler) saveAvatar(w http.ResponseWriter, r *http.Request, header *multipart.FileHeader) (string, bool) {
-	if header == nil {
-		return "", true
-	}
+func (h *DeskHandler) openAvatar(w http.ResponseWriter, header *multipart.FileHeader) (multipart.File, bool) {
 	if header.Size > images.MaxUploadSize {
 		httpx.WriteError(w, http.StatusRequestEntityTooLarge, "Размер изображения не должен превышать 10 МиБ")
-		return "", false
-	}
-	if h.imageStorage == nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "Загрузка аватара временно недоступна")
-		return "", false
+		return nil, false
 	}
 	file, err := header.Open()
 	if err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "Не удалось прочитать файл аватара")
-		return "", false
+		return nil, false
 	}
-	defer file.Close()
-	filename, err := h.imageStorage.Save(file)
-	if err != nil {
-		switch {
-		case errors.Is(err, images.ErrImageTooLarge):
-			httpx.WriteError(w, http.StatusRequestEntityTooLarge, "Размер изображения не должен превышать 10 МиБ")
-		case errors.Is(err, images.ErrInvalidImage):
-			httpx.WriteError(w, http.StatusBadRequest, "Поддерживаются только изображения JPEG, PNG, GIF и WEBP")
-		default:
-			middleware.LoggerFromContext(r.Context()).ErrorContext(r.Context(), "failed to save desk avatar", "error", err)
-			httpx.WriteError(w, http.StatusInternalServerError, "Не удалось сохранить аватар")
-		}
-		return "", false
-	}
-	return filename, true
+	return file, true
 }
 
 // Create godoc
@@ -216,27 +153,21 @@ func (h *DeskHandler) Create(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusUnsupportedMediaType, "Поддерживаются JSON и multipart/form-data")
 		return
 	}
-	if err := req.Validate(); err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "Некорректные данные доски")
-		return
-	}
-	filename, ok := h.saveAvatar(w, r, avatarHeader)
-	if !ok {
-		return
-	}
 	input := req.ToDomain()
-	if filename != "" {
-		input.AvatarImgURL = &filename
+	if avatarHeader != nil {
+		avatar, ok := h.openAvatar(w, avatarHeader)
+		if !ok {
+			return
+		}
+		defer avatar.Close()
+		input.Avatar = avatar
 	}
 	desk, err := h.service.Create(r.Context(), userID, input)
 	if err != nil {
-		if filename != "" {
-			_ = h.imageStorage.Delete(filename)
-		}
 		h.writeError(w, r, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusCreated, h.response(desk, nil))
+	httpx.WriteJSON(w, http.StatusCreated, DeskResponseFromDomain(desk, nil, h.baseURL))
 }
 
 // ListOwn godoc
@@ -302,7 +233,33 @@ func (h *DeskHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, r, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, h.response(result.Desk, result.Pins))
+	httpx.WriteJSON(w, http.StatusOK, DeskResponseFromDomain(result.Desk, result.Pins, h.baseURL))
+}
+
+// GetFirstPins godoc
+// @Summary Получить первые три пина доски (для превью и аватарки)
+// @Description Возвращает до трёх самых ранних пинов доски; если их меньше — столько, сколько есть.
+// @Tags Desks
+// @Produce json
+// @Param deskID path int true "Идентификатор доски"
+// @Success 200 {object} DeskPreviewResponse
+// @Failure 400 {object} map[string]interface{}
+// @Failure 403 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Router /desks/{deskID}/pins/preview [get]
+func (h *DeskHandler) GetFirstPins(w http.ResponseWriter, r *http.Request) {
+	deskID, err := strconv.Atoi(r.PathValue("deskID"))
+	if err != nil || deskID < 1 {
+		httpx.WriteError(w, http.StatusBadRequest, "Некорректный идентификатор доски")
+		return
+	}
+	userID, _ := middleware.UserIDFromContext(r.Context())
+	pins, err := h.service.GetFirstPins(r.Context(), userID, deskID)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, DeskPreviewResponseFromDomain(pins, h.baseURL))
 }
 
 // Update godoc
@@ -389,45 +346,20 @@ func (h *DeskHandler) Update(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "Некорректные данные доски")
 		return
 	}
-
-	previousAvatar := ""
-	if avatarHeader != nil || req.RemoveAvatar {
-		old, err := h.service.GetWithPins(r.Context(), userID, deskID)
-		if err != nil {
-			h.writeError(w, r, err)
+	if avatarHeader != nil {
+		avatar, ok := h.openAvatar(w, avatarHeader)
+		if !ok {
 			return
 		}
-		if old.Desk.AvatarImgURL != nil {
-			previousAvatar = *old.Desk.AvatarImgURL
-		}
-	}
-	filename, ok := h.saveAvatar(w, r, avatarHeader)
-	if !ok {
-		return
-	}
-	if avatarHeader != nil {
-		input.AvatarImgURL = &filename
-		input.AvatarImgURLSet = true
+		defer avatar.Close()
+		input.Avatar = avatar
 	}
 	desk, err := h.service.Update(r.Context(), userID, deskID, input)
 	if err != nil {
-		if filename != "" {
-			_ = h.imageStorage.Delete(filename)
-		}
 		h.writeError(w, r, err)
 		return
 	}
-	newAvatar := ""
-	if input.AvatarImgURL != nil {
-		newAvatar = *input.AvatarImgURL
-	}
-	if input.AvatarImgURLSet && previousAvatar != "" && previousAvatar != newAvatar &&
-		images.IsStoredFilename(previousAvatar) && h.imageStorage != nil {
-		if err := h.imageStorage.Delete(previousAvatar); err != nil {
-			middleware.LoggerFromContext(r.Context()).ErrorContext(r.Context(), "failed to delete old desk avatar", "filename", previousAvatar, "error", err)
-		}
-	}
-	httpx.WriteJSON(w, http.StatusOK, h.response(desk, nil))
+	httpx.WriteJSON(w, http.StatusOK, DeskResponseFromDomain(desk, nil, h.baseURL))
 }
 
 // Delete godoc
@@ -503,7 +435,7 @@ func (h *DeskHandler) changePin(w http.ResponseWriter, r *http.Request, add bool
 func (h *DeskHandler) writeDesks(w http.ResponseWriter, desks []domain.Desk) {
 	out := make([]DeskResponse, len(desks))
 	for i, desk := range desks {
-		out[i] = h.response(desk, nil)
+		out[i] = DeskResponseFromDomain(desk, nil, h.baseURL)
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"desks": out})
 }
@@ -518,6 +450,10 @@ func (h *DeskHandler) writeError(w http.ResponseWriter, r *http.Request, err err
 		httpx.WriteError(w, http.StatusForbidden, "Нет доступа к доске")
 	case errors.Is(err, domain.ErrPinNotFound):
 		httpx.WriteError(w, http.StatusNotFound, "Пин не найден")
+	case errors.Is(err, domain.ErrImageTooLarge):
+		httpx.WriteError(w, http.StatusRequestEntityTooLarge, "Размер изображения не должен превышать 10 МиБ")
+	case errors.Is(err, domain.ErrInvalidImage):
+		httpx.WriteError(w, http.StatusBadRequest, "Поддерживаются только изображения JPEG, PNG, GIF и WEBP")
 	default:
 		middleware.LoggerFromContext(r.Context()).ErrorContext(r.Context(), "Не удалось выполнить запрос к доске", "error", err, "path", strings.TrimSpace(r.URL.Path))
 		httpx.WriteError(w, http.StatusInternalServerError, "Не удалось выполнить запрос к доске")
