@@ -43,10 +43,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
@@ -112,7 +112,7 @@ jobs:
 
 
       - name: Upload specifications as workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: pinpals-openapi-${{ github.sha }}
           path: site/
@@ -120,7 +120,7 @@ jobs:
 
       - name: Upload GitHub Pages artifact
         if: github.ref == 'refs/heads/develop'
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: site/
 
@@ -134,4 +134,4 @@ jobs:
     steps:
       - name: Deploy OpenAPI documentation
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
