@@ -19,15 +19,21 @@ func New(addr string, handler http.Handler) *http.Server {
 	}
 }
 
+// RequestLogger creates one request-scoped logger and attaches its request ID
+// to the context before any handler or database operation is executed.
 func RequestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
+	if logger == nil {
+		logger = slog.Default()
+	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			requestLogger := logger
-			if requestLogger == nil {
-				requestLogger = slog.Default()
-			}
-			requestLogger.InfoContext(r.Context(), "http request", "method", r.Method, "path", r.URL.Path)
-			next.ServeHTTP(w, r.WithContext(middleware.ContextWithLogger(r.Context(), requestLogger)))
+			requestID := middleware.NewRequestID(r.Header.Get(middleware.RequestIDHeader))
+			w.Header().Set(middleware.RequestIDHeader, requestID)
+			requestLogger := logger.With("request_id", requestID)
+			ctx := middleware.ContextWithRequestID(r.Context(), requestID)
+			ctx = middleware.ContextWithLogger(ctx, requestLogger)
+			requestLogger.InfoContext(ctx, "http request", "method", r.Method, "path", r.URL.Path)
+			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }

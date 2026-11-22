@@ -22,7 +22,7 @@ import (
 func Run(
 	ctx context.Context,
 	setupDB func(context.Context, *config.Config, *slog.Logger) (*pgxpool.Pool, error),
-	registerRoutes func(*config.Config, *slog.Logger, *pgxpool.Pool, *http.ServeMux),
+	registerRoutes func(*config.Config, *slog.Logger, *pgxpool.Pool, *http.ServeMux) func(),
 ) error {
 	cfg := config.MustLoad()
 
@@ -48,14 +48,18 @@ func Run(
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
-	registerRoutes(cfg, logger, pool, mux)
+	shutdownRoutes := registerRoutes(cfg, logger, pool, mux)
 
 	var handler http.Handler = metrics.Middleware(mux)
 	handler = RequestLogger(logger)(handler)
 	handler = middleware.CORS(cfg.CORS.AllowedOrigins)(handler)
 	handler = middleware.SecurityHeaders(handler)
+	handler = RequestLogger(logger)(handler)
 
 	httpServer := New(":"+cfg.App.Port, handler)
+	if shutdownRoutes != nil {
+		httpServer.RegisterOnShutdown(shutdownRoutes)
+	}
 
 	metricsServer := metrics.NewServer(":" + cfg.App.MetricsPort)
 	go func() {
@@ -81,6 +85,10 @@ func Run(
 	case err := <-errCh:
 		if err != nil {
 			logger.Error("server stopped unexpectedly", "error", err)
+			_ = httpServer.Close()
+			if shutdownRoutes != nil {
+				shutdownRoutes()
+			}
 			return err
 		}
 	}

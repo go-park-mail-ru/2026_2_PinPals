@@ -2,7 +2,6 @@ package auth_service
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -12,6 +11,7 @@ import (
 	"2026_2_PinPals/auth_service/repository"
 	"2026_2_PinPals/auth_service/usecase"
 	"2026_2_PinPals/pkg/config"
+	"2026_2_PinPals/pkg/database"
 	"2026_2_PinPals/pkg/middleware"
 	"2026_2_PinPals/pkg/server"
 
@@ -19,24 +19,10 @@ import (
 )
 
 func SetupPostgres(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*pgxpool.Pool, error) {
-	pool, err := pgxpool.New(ctx, cfg.Postgres.DSN())
-	if err != nil {
-		logger.Error("failed to create postgres pool", "error", err)
-		return nil, fmt.Errorf("create postgres pool: %w", err)
-	}
-
-	pingCtx, cancelPoolPing := context.WithTimeout(ctx, 5*time.Second)
-	defer cancelPoolPing()
-	if err := pool.Ping(pingCtx); err != nil {
-		logger.Error("failed to connect to postgres", "error", err)
-		pool.Close()
-		return nil, fmt.Errorf("connect to postgres: %w", err)
-	}
-
-	return pool, nil
+	return database.NewPostgresPool(ctx, cfg.Postgres.DSN(), logger)
 }
 
-func RegisterRoutes(cfg *config.Config, logger *slog.Logger, pool *pgxpool.Pool, mux *http.ServeMux) {
+func RegisterRoutes(cfg *config.Config, logger *slog.Logger, pool *pgxpool.Pool, mux *http.ServeMux) func() {
 	tokenManager := middleware.NewTokenManager(
 		[]byte(cfg.Auth.JWTSecret),
 		int64(cfg.Auth.TokenTTL/time.Second),
@@ -49,6 +35,7 @@ func RegisterRoutes(cfg *config.Config, logger *slog.Logger, pool *pgxpool.Pool,
 	mux.HandleFunc("POST /api/v1/auth/register", authHandler.Register)
 	mux.HandleFunc("POST /api/v1/auth/login", authHandler.Login)
 	mux.Handle("POST /api/v1/auth/logout", middleware.CSRF(middleware.Access(tokenManager)(http.HandlerFunc(authHandler.Logout))))
+	return nil
 }
 
 func Run(ctx context.Context) error {
