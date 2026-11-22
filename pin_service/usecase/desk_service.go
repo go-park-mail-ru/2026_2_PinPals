@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"io"
-	"log/slog"
 	"strings"
 	"unicode/utf8"
 
 	"2026_2_PinPals/pin_service/domain"
 	"2026_2_PinPals/pkg/images"
+	"2026_2_PinPals/pkg/middleware"
 )
 
 type DeskRepository interface {
@@ -70,7 +70,7 @@ func (s *DeskService) removeReplacedAvatar(ctx context.Context, previous, curren
 		return
 	}
 	if err := s.images.Delete(*previous); err != nil {
-		slog.ErrorContext(ctx, "failed to delete old desk avatar", "filename", *previous, "error", err)
+		middleware.LoggerFromContext(ctx).ErrorContext(ctx, "failed to delete old desk avatar", "filename", *previous, "error", err)
 	}
 }
 

@@ -47,6 +47,9 @@ func TestCORS(t *testing.T) {
 			if tt.wantAllowOrigin && rec.Header().Get("Access-Control-Allow-Origin") != tt.origin {
 				t.Fatalf("unexpected allow-origin header: %q", rec.Header().Get("Access-Control-Allow-Origin"))
 			}
+			if tt.wantAllowOrigin && tt.method != http.MethodOptions && rec.Header().Get("Access-Control-Expose-Headers") != RequestIDHeader {
+				t.Fatalf("request id header is not exposed to browser clients: %q", rec.Header().Get("Access-Control-Expose-Headers"))
+			}
 			if tt.method == http.MethodOptions && rec.Header().Get("Access-Control-Allow-Methods") == "" {
 				t.Fatal("preflight methods header is missing")
 			}

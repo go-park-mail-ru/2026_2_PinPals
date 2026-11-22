@@ -7,6 +7,7 @@ on:
       - 'auth_service/**'
       - 'pin_service/**'
       - 'user_service/**'
+      - 'chat_service/**'
       - 'cmd/**'
       - 'pkg/**'
       - 'Makefile'
@@ -20,6 +21,7 @@ on:
       - 'auth_service/**'
       - 'pin_service/**'
       - 'user_service/**'
+      - 'chat_service/**'
       - 'cmd/**'
       - 'pkg/**'
       - 'Makefile'
@@ -53,7 +55,7 @@ jobs:
 
       - name: Generate OpenAPI specifications for services present in this branch
         run: |
-          for entry in "auth_service:auth" "pin_service:pin" "user_service:user"; do
+          for entry in "auth_service:auth" "pin_service:pin" "user_service:user" "chat_service:chat"; do
             service="${entry%%:*}"
             output="${entry##*:}"
             if [ -f "cmd/${service}/main.go" ] && [ -d "${service}" ]; then
@@ -69,7 +71,7 @@ jobs:
           mkdir -p site
           test -s site/index.html
 
-          for spec in auth pin user; do
+          for spec in auth pin user chat; do
             if [ -f "docs/${spec}/swagger.yaml" ]; then
               mkdir -p "site/${spec}"
               cp "docs/${spec}/swagger.yaml" "site/${spec}/openapi.yaml"
