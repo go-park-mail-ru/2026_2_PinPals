@@ -13,9 +13,13 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-const userTagConstraint = "user_user_tag_key"
+const (
+	userTagConstraint          = "user_user_tag_key"
+	subscriptionSelfConstraint = "subscription_no_self"
+)
 
 type queryRower interface {
+	Query(context.Context, string, ...any) (pgx.Rows, error)
 	QueryRow(context.Context, string, ...any) pgx.Row
 }
 
@@ -40,6 +44,35 @@ const queryDeleteProfile = `
 	WHERE user_id = $1
 	  AND deleted_at IS NULL
 	RETURNING user_id
+`
+
+const queryCreateSubscription = `
+	INSERT INTO subscription (subscriber_id, subscribee_id)
+	SELECT $1, user_id
+	FROM "user"
+	WHERE user_id = $2
+	  AND deleted_at IS NULL
+	ON CONFLICT (subscribee_id, subscriber_id) DO UPDATE
+	SET subscribee_id = EXCLUDED.subscribee_id
+	RETURNING subscription_id
+`
+
+const queryDeleteSubscription = `
+	DELETE FROM subscription
+	WHERE subscriber_id = $1
+	  AND subscribee_id = $2
+	RETURNING subscription_id
+`
+
+const querySearchUsers = `
+	SELECT user_id, name, user_tag, birth_date, description, avatar_url, created_at
+	FROM "user"
+	WHERE user_tag_tsv @@ websearch_to_tsquery('simple', $1)
+	  AND deleted_at IS NULL
+	ORDER BY
+		ts_rank(user_tag_tsv, websearch_to_tsquery('simple', $1)) DESC,
+		user_id DESC
+	LIMIT $2 OFFSET $3
 `
 
 func (r *Repository) GetProfile(ctx context.Context, userID int) (*domain.User, error) {
@@ -172,4 +205,102 @@ func isUserTagUniqueViolation(err error) bool {
 	return errors.As(err, &pgErr) &&
 		pgErr.Code == "23505" &&
 		pgErr.ConstraintName == userTagConstraint
+}
+
+func (r *Repository) CreateSubscription(
+	ctx context.Context,
+	subscriberID int,
+	subscribeeID int,
+) error {
+	var subscriptionID int
+
+	err := r.pool.QueryRow(
+		ctx,
+		queryCreateSubscription,
+		subscriberID,
+		subscribeeID,
+	).Scan(&subscriptionID)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.ErrUserNotFound
+	}
+
+	if err != nil {
+		if isSelfSubscriptionViolation(err) {
+			return domain.ErrValidation
+		}
+
+		return err
+	}
+
+	return nil
+}
+
+func (r *Repository) DeleteSubscription(
+	ctx context.Context,
+	subscriberID int,
+	subscribeeID int,
+) error {
+	var subscriptionID int
+
+	err := r.pool.QueryRow(
+		ctx,
+		queryDeleteSubscription,
+		subscriberID,
+		subscribeeID,
+	).Scan(&subscriptionID)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.ErrSubscriptionNotFound
+	}
+
+	return err
+}
+
+func isSelfSubscriptionViolation(err error) bool {
+	var pgErr *pgconn.PgError
+
+	return errors.As(err, &pgErr) &&
+		pgErr.Code == "23514" &&
+		pgErr.ConstraintName == subscriptionSelfConstraint
+}
+
+func (r *Repository) SearchUsers(
+	ctx context.Context,
+	query string,
+	limit int,
+	offset int,
+) ([]domain.User, error) {
+	if limit < 1 || offset < 0 {
+		return nil, domain.ErrValidation
+	}
+
+	rows, err := r.pool.Query(ctx, querySearchUsers, query, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	users := make([]domain.User, 0, limit)
+	for rows.Next() {
+		var user domain.User
+		if err := rows.Scan(
+			&user.ID,
+			&user.Name,
+			&user.UserTag,
+			&user.BirthDate,
+			&user.Description,
+			&user.AvatarURL,
+			&user.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		users = append(users, user)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return users, nil
 }
