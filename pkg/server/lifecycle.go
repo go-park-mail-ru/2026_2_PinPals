@@ -15,6 +15,8 @@ import (
 	"2026_2_PinPals/pkg/middleware"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"2026_2_PinPals/pkg/metrics"
 )
 
 func Run(
@@ -38,6 +40,7 @@ func Run(
 		return fmt.Errorf("setup db: %w", err)
 	}
 	defer pool.Close()
+	metrics.RegisterPool(pool)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
@@ -47,12 +50,19 @@ func Run(
 	})
 	registerRoutes(cfg, logger, pool, mux)
 
-	var handler http.Handler = mux
+	var handler http.Handler = metrics.Middleware(mux)
 	handler = RequestLogger(logger)(handler)
 	handler = middleware.CORS(cfg.CORS.AllowedOrigins)(handler)
 	handler = middleware.SecurityHeaders(handler)
 
 	httpServer := New(":"+cfg.App.Port, handler)
+
+	metricsServer := metrics.NewServer(":" + cfg.App.MetricsPort)
+	go func() {
+		if err := metricsServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logger.Error("metrics server stopped", "error", err)
+		}
+	}()
 
 	shutdownCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -77,6 +87,7 @@ func Run(
 
 	shutdownRequestCtx, cancelShutdown := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancelShutdown()
+	_ = metricsServer.Shutdown(shutdownRequestCtx)
 	if err := httpServer.Shutdown(shutdownRequestCtx); err != nil {
 		logger.Error("graceful shutdown failed", "error", err)
 		return err
