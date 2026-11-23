@@ -11,7 +11,6 @@ erDiagram
         date birth_date
         text description
         text avatar_url
-        bool deleted
         timestamptz created_at
         timestamptz updated_at
         timestamptz deleted_at
@@ -39,7 +38,6 @@ erDiagram
         text description
         text avatar_img_url
         smallint entry_status
-        bool deleted
         timestamptz created_at
         timestamptz updated_at
         timestamptz deleted_at
@@ -51,7 +49,6 @@ erDiagram
         text image_url
         text name
         text description
-        bool deleted
         timestamptz created_at
         timestamptz updated_at
         timestamptz deleted_at
@@ -62,7 +59,6 @@ erDiagram
         int author_id FK
         int pin_id FK
         text body
-        bool deleted
         timestamptz created_at
         timestamptz updated_at
         timestamptz deleted_at
@@ -94,7 +90,6 @@ erDiagram
         int user_a_id FK
         int user_b_id FK
         text name
-        bool deleted
         timestamptz created_at
         timestamptz updated_at
         timestamptz deleted_at
@@ -106,7 +101,6 @@ erDiagram
         int author_id FK
         text body
         int related_to FK
-        bool deleted
         timestamptz created_at
         timestamptz updated_at
         timestamptz deleted_at
