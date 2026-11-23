@@ -42,7 +42,7 @@ func TestRequestLogger(t *testing.T) {
 	})
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	handler := RequestLogger(logger)(next)
+	handler := middleware.RequestLogger(logger)(next)
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 	rec := httptest.NewRecorder()

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -16,6 +15,7 @@ import (
 	"2026_2_PinPals/pkg/httpx"
 	"2026_2_PinPals/pkg/images"
 	"2026_2_PinPals/pkg/middleware"
+
 	"github.com/gorilla/websocket"
 )
 
@@ -231,34 +231,40 @@ func (h *Handler) WebSocket(w http.ResponseWriter, r *http.Request) {
 		cancel()
 		return
 	}
-	logger := middleware.LoggerFromContext(r.Context())
+	connectionLogger := middleware.LoggerFromContext(r.Context())
 	go wsClient.writePump(ctx)
 	wsClient.readPump(ctx, func(payload []byte) {
-		h.handleSocketMessage(ctx, logger, wsClient, userID, chatID, payload)
+		messageCtx := middleware.OperationContext(ctx)
+		h.handleSocketMessage(messageCtx, wsClient, userID, chatID, payload)
 	})
 	h.hub.unregister(wsClient)
-	logger.InfoContext(ctx, "websocket connection closed", "chat_id", chatID, "user_id", userID)
+	connectionLogger.InfoContext(r.Context(), "websocket connection closed", "chat_id", chatID, "user_id", userID)
 }
 
-func (h *Handler) handleSocketMessage(ctx context.Context, logger *slog.Logger, wsClient *client, userID, chatID int, payload []byte) {
+func (h *Handler) handleSocketMessage(ctx context.Context, wsClient *client, userID, chatID int, payload []byte) {
+	logger := middleware.LoggerFromContext(ctx)
 	var request SendMessageRequest
 	decoder := json.NewDecoder(bytes.NewReader(payload))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&request); err != nil {
+		logger.WarnContext(ctx, "websocket message rejected", "chat_id", chatID, "user_id", userID, "reason", "invalid_json")
 		wsClient.enqueue(socketError("некорректный JSON"))
 		return
 	}
 	var extra any
 	if err := decoder.Decode(&extra); err != io.EOF {
+		logger.WarnContext(ctx, "websocket message rejected", "chat_id", chatID, "user_id", userID, "reason", "multiple_json_values")
 		wsClient.enqueue(socketError("некорректный JSON"))
 		return
 	}
 	if request.Type != "message" {
+		logger.WarnContext(ctx, "websocket message rejected", "chat_id", chatID, "user_id", userID, "reason", "unsupported_event_type")
 		wsClient.enqueue(socketError("неподдерживаемый тип события"))
 		return
 	}
 	request, valid := request.normalized()
 	if !valid {
+		logger.WarnContext(ctx, "websocket message rejected", "chat_id", chatID, "user_id", userID, "reason", "validation_failed")
 		wsClient.enqueue(socketError("некорректное сообщение"))
 		return
 	}
@@ -275,6 +281,7 @@ func (h *Handler) handleSocketMessage(ctx context.Context, logger *slog.Logger, 
 		}
 		return
 	}
+	logger.InfoContext(ctx, "websocket message created", "chat_id", chatID, "user_id", userID, "message_id", message.ID)
 	h.broadcastMessage(chatID, message)
 }
 

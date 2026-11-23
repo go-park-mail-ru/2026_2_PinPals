@@ -50,7 +50,7 @@ func Run(
 	var handler http.Handler = mux
 	handler = middleware.CORS(cfg.CORS.AllowedOrigins)(handler)
 	handler = middleware.SecurityHeaders(handler)
-	handler = RequestLogger(logger)(handler)
+	handler = middleware.RequestLogger(logger)(handler)
 
 	httpServer := New(":"+cfg.App.Port, handler)
 	if shutdownRoutes != nil {
