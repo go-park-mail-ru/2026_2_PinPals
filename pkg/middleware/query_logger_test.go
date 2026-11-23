@@ -36,3 +36,25 @@ func TestQueryLoggerCorrelatesQueriesWithoutLoggingArguments(t *testing.T) {
 		t.Fatalf("query log contains SQL argument: %s", logLine)
 	}
 }
+
+func TestQueryLoggerUsesIndependentWebSocketOperationRequestID(t *testing.T) {
+	var output bytes.Buffer
+	baseLogger := slog.New(slog.NewJSONHandler(&output, nil))
+	connectionCtx := RequestContext(contextWithBaseLogger(context.Background(), baseLogger), "8b2519f1-6f25-4c70-b12d-91e2b0f12f73")
+	messageCtx := OperationContext(connectionCtx)
+	requestID, ok := RequestIDFromContext(messageCtx)
+	if !ok || requestID == "8b2519f1-6f25-4c70-b12d-91e2b0f12f73" {
+		t.Fatalf("WebSocket operation should have its own request ID, got %q", requestID)
+	}
+
+	tracer := NewQueryLogger()
+	messageCtx = tracer.TraceQueryStart(messageCtx, nil, pgx.TraceQueryStartData{SQL: "SELECT 1"})
+	tracer.TraceQueryEnd(messageCtx, nil, pgx.TraceQueryEndData{CommandTag: pgconn.NewCommandTag("SELECT 1")})
+
+	if !strings.Contains(output.String(), requestID) {
+		t.Fatalf("database query log does not contain WebSocket operation request ID %q: %s", requestID, output.String())
+	}
+	if strings.Contains(output.String(), "8b2519f1-6f25-4c70-b12d-91e2b0f12f73") {
+		t.Fatalf("database query log incorrectly uses WebSocket handshake request ID: %s", output.String())
+	}
+}

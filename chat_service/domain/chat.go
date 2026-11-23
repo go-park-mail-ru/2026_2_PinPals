@@ -19,6 +19,9 @@ type Participant struct {
 	AvatarURL *string `json:"avatar_url,omitempty"`
 }
 
+// Message contains only the data persisted in chat_message.
+// Author profile fields are deliberately kept out of this entity to avoid
+// duplicating user data in every stored message.
 type Message struct {
 	ID        int       `json:"message_id"`
 	ChatID    int       `json:"chat_id"`
@@ -28,6 +31,9 @@ type Message struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// MessageView is a read model enriched with the author's current public
+// profile data. The repository fills these fields with a JOIN to the user
+// table; they are never stored in chat_message.
 type MessageView struct {
 	Message
 	AuthorName string
