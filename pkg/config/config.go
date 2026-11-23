@@ -19,6 +19,7 @@ type Config struct {
 type AppConfig struct {
 	Port     string
 	BaseURL  string
+	MetricsPort string
 	Env      string
 	LogLevel string
 	ImageDir string
@@ -47,6 +48,7 @@ func MustLoad() *Config {
 		App: AppConfig{
 			Port:     getEnv("APP_PORT", "8000"),
 			BaseURL:  normalizeBaseURL(getEnv("APP_BASE_URL", "http://localhost:8000")),
+			MetricsPort: getEnv("METRICS_PORT", "9100"),
 			Env:      getEnv("APP_ENV", "development"),
 			LogLevel: getEnv("LOG_LEVEL", "info"),
 			ImageDir: getEnv("IMAGE_DIR", "./images"),
