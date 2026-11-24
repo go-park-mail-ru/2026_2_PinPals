@@ -1,0 +1,96 @@
+name: pinpals-db
+
+services:
+  postgres:
+    image: postgres:16
+    command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
+    environment:
+      POSTGRES_DB: pinpals
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      - ./postgres/init/01_extensions.sql:/docker-entrypoint-initdb.d/01_extensions.sql:ro
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d pinpals"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [db_net]
+    restart: unless-stopped
+
+  migrate:
+    image: postgres:16
+    profiles: ["tools"]
+    depends_on:
+      postgres: {condition: service_healthy}
+    environment:
+      PGHOST: postgres
+      PGUSER: postgres
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: pinpals
+    volumes:
+      - ../migrations:/migrations:ro
+      - ./postgres/set_passwords.sql:/set_passwords.sql:ro
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+        for f in /migrations/*.sql; do echo "applying $$f"; psql -v ON_ERROR_STOP=1 -q -f "$$f"; done
+        psql -v ON_ERROR_STOP=1 -q -f /set_passwords.sql \
+          -v migrator_pw="${MIGRATOR_PASSWORD}" -v auth_pw="${AUTH_SVC_PASSWORD}" \
+          -v user_pw="${USER_SVC_PASSWORD}" -v pin_pw="${PIN_SVC_PASSWORD}" \
+          -v admin_pw="${ADMIN_RO_PASSWORD}"
+        echo "done"
+    networks: [db_net]
+
+  postgres_exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.15.0
+    command: ["--extend.query-path=/etc/postgres_exporter/queries.yaml"]
+    environment:
+      DATA_SOURCE_NAME: postgresql://admin_ro:${ADMIN_RO_PASSWORD}@postgres:5432/pinpals?sslmode=disable
+    volumes:
+      - ./monitoring/postgres_exporter/queries.yaml:/etc/postgres_exporter/queries.yaml:ro
+    depends_on:
+      postgres: {condition: service_healthy}
+    networks: [db_net, monitoring_net]
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.16.0-distroless
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - promdata:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    networks: [monitoring_net]
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:13.3.1-distroless
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafanadata:/var/lib/grafana
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on: [prometheus]
+    networks: [monitoring_net]
+    restart: unless-stopped
+
+networks:
+  db_net:
+  monitoring_net:
+
+volumes:
+  pgdata:
+  promdata:
+  grafanadata:
