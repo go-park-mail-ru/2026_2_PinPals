@@ -8,8 +8,6 @@ import (
 	"2026_2_PinPals/chat_service/domain"
 )
 
-const MaxMessageLength = 4000
-
 // ChatRepository describes the persistence operations required by chat use cases.
 type ChatRepository interface {
 	CreateChat(ctx context.Context, userAID, userBID int) (domain.Chat, error)
@@ -49,7 +47,7 @@ func (s *Service) HasAccess(ctx context.Context, userID, chatID int) (bool, erro
 }
 
 func (s *Service) ListMessages(ctx context.Context, userID, chatID, limit, beforeID int) ([]domain.MessageView, error) {
-	if userID < 1 || chatID < 1 || limit < 1 || limit > 100 || beforeID < 0 {
+	if userID < 1 || chatID < 1 || limit < 1 || limit > domain.MaxMessagesPerPage || beforeID < 0 {
 		return nil, domain.ErrValidation
 	}
 	return s.repository.ListMessages(ctx, userID, chatID, limit, beforeID)
@@ -57,7 +55,7 @@ func (s *Service) ListMessages(ctx context.Context, userID, chatID, limit, befor
 
 func (s *Service) CreateMessage(ctx context.Context, chatID, authorID int, body string, relatedTo *int) (domain.MessageView, error) {
 	body = strings.TrimSpace(body)
-	if chatID < 1 || authorID < 1 || body == "" || !utf8.ValidString(body) || utf8.RuneCountInString(body) > MaxMessageLength {
+	if chatID < 1 || authorID < 1 || body == "" || !utf8.ValidString(body) || utf8.RuneCountInString(body) > domain.MaxMessageLength {
 		return domain.MessageView{}, domain.ErrValidation
 	}
 	if relatedTo != nil && *relatedTo < 1 {

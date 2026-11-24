@@ -1,6 +1,8 @@
 # 2026_2_PinPals
 Backend проекта Pinterest — команды PinPals
 
+> Для AI coding agents: перед анализом и изменением backend-кода прочитайте [AI_PROJECT_GUIDE.md](AI_PROJECT_GUIDE.md) — в нём описаны архитектура, структура, контракты, соглашения и команды проверки.
+
 ## Состав команды
 
 - [Шерстеникин Никита](https://github.com/Sherstanoi)

@@ -10,7 +10,6 @@ import (
 	"2026_2_PinPals/pin_service/repository"
 	"2026_2_PinPals/pin_service/usecase"
 	"2026_2_PinPals/pkg/config"
-	"2026_2_PinPals/pkg/database"
 	"2026_2_PinPals/pkg/images"
 	"2026_2_PinPals/pkg/middleware"
 	"2026_2_PinPals/pkg/server"
@@ -18,10 +17,6 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
-
-func SetupPostgres(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*pgxpool.Pool, error) {
-	return database.NewPostgresPool(ctx, cfg.Postgres.DSN(), logger)
-}
 
 func RegisterRoutes(cfg *config.Config, logger *slog.Logger, pool *pgxpool.Pool, mux *http.ServeMux) func() {
 	tokenManager := middleware.NewTokenManager(
@@ -65,5 +60,5 @@ func RegisterRoutes(cfg *config.Config, logger *slog.Logger, pool *pgxpool.Pool,
 }
 
 func Run(ctx context.Context) error {
-	return server.Run(ctx, SetupPostgres, RegisterRoutes)
+	return server.Run(ctx, RegisterRoutes)
 }

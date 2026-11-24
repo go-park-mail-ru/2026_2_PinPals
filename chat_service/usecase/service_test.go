@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"2026_2_PinPals/chat_service/domain"
@@ -67,5 +68,25 @@ func TestListMessagesRejectsInvalidPagination(t *testing.T) {
 	service := NewService(&repositoryStub{})
 	if _, err := service.ListMessages(context.Background(), 1, 1, 101, 0); err != domain.ErrValidation {
 		t.Fatalf("ListMessages() error = %v, want %v", err, domain.ErrValidation)
+	}
+}
+
+func TestCreateMessageRejectsBodyOverDomainLimit(t *testing.T) {
+	repo := &repositoryStub{}
+	service := NewService(repo)
+	body := strings.Repeat("x", domain.MaxMessageLength+1)
+
+	if _, err := service.CreateMessage(context.Background(), 1, 2, body, nil); err != domain.ErrValidation {
+		t.Fatalf("CreateMessage() error = %v, want %v", err, domain.ErrValidation)
+	}
+	if repo.createMessageBody != "" {
+		t.Fatalf("repository was called for an oversized body: %q", repo.createMessageBody)
+	}
+}
+
+func TestListMessagesAcceptsMaximumDomainPageSize(t *testing.T) {
+	service := NewService(&repositoryStub{})
+	if _, err := service.ListMessages(context.Background(), 1, 1, domain.MaxMessagesPerPage, 0); err != nil {
+		t.Fatalf("ListMessages() rejected maximum page size: %v", err)
 	}
 }
