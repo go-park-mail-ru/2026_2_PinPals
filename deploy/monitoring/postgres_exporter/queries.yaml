@@ -1,0 +1,94 @@
+# --- Продуктовые метрики: view v_metrics_overview (миграция 20) ---
+pinpals_product:
+  query: |
+    SELECT active_users_day, active_users_week, avg_session_seconds_week,
+           new_pins_day, new_likes_day, new_comments_day, pin_saves_day,
+           new_subscriptions_day, chat_messages_day, new_feedback_day,
+           new_complaints_day, users_total, pins_total,
+           avg_likes_per_pin, avg_comments_per_pin
+    FROM v_metrics_overview
+  master: true
+  metrics:
+    - active_users_day:        {usage: "GAUGE", description: "Активные пользователи за 24 часа"}
+    - active_users_week:       {usage: "GAUGE", description: "Активные пользователи за 7 дней"}
+    - avg_session_seconds_week: {usage: "GAUGE", description: "Среднее время сессии за 7 дней, сек"}
+    - new_pins_day:            {usage: "GAUGE", description: "Новых пинов за 24 часа"}
+    - new_likes_day:           {usage: "GAUGE", description: "Новых лайков за 24 часа"}
+    - new_comments_day:        {usage: "GAUGE", description: "Новых комментариев за 24 часа"}
+    - pin_saves_day:           {usage: "GAUGE", description: "Сохранений пинов на доски за 24 часа"}
+    - new_subscriptions_day:   {usage: "GAUGE", description: "Новых подписок за 24 часа"}
+    - chat_messages_day:       {usage: "GAUGE", description: "Сообщений в чатах за 24 часа"}
+    - new_feedback_day:        {usage: "GAUGE", description: "Новых отзывов и жалоб за 24 часа"}
+    - new_complaints_day:      {usage: "GAUGE", description: "Новых жалоб за 24 часа"}
+    - users_total:             {usage: "GAUGE", description: "Активных пользователей всего"}
+    - pins_total:              {usage: "GAUGE", description: "Пинов всего"}
+    - avg_likes_per_pin:       {usage: "GAUGE", description: "Среднее число лайков на пин"}
+    - avg_comments_per_pin:    {usage: "GAUGE", description: "Среднее число комментариев на пин"}
+
+# --- Соединения по сервисам (application_name из миграции 18) ---
+pinpals_activity:
+  query: |
+    SELECT COALESCE(NULLIF(application_name, ''), 'unknown') AS app,
+           usename AS role,
+           state,
+           count(*) AS connections
+    FROM pg_stat_activity
+    WHERE datname = current_database() AND state IS NOT NULL
+    GROUP BY 1, 2, 3
+  master: true
+  metrics:
+    - app:         {usage: "LABEL",  description: "Сервис (application_name)"}
+    - role:        {usage: "LABEL",  description: "Роль БД"}
+    - state:       {usage: "LABEL",  description: "Состояние соединения"}
+    - connections: {usage: "GAUGE",  description: "Число соединений"}
+
+# --- Блокировки и долгие транзакции ---
+pinpals_lock_waits:
+  query: |
+    SELECT count(*) AS waiting
+    FROM pg_stat_activity
+    WHERE wait_event_type = 'Lock'
+  master: true
+  metrics:
+    - waiting: {usage: "GAUGE", description: "Сессии, ожидающие блокировку"}
+
+pinpals_long_tx:
+  query: |
+    SELECT COALESCE(max(extract(epoch FROM now() - xact_start)), 0)::double precision AS seconds
+    FROM pg_stat_activity
+    WHERE xact_start IS NOT NULL AND state <> 'idle' AND pid <> pg_backend_pid()
+  master: true
+  metrics:
+    - seconds: {usage: "GAUGE", description: "Возраст самой старой открытой транзакции, сек"}
+
+pinpals_table:
+  query: |
+    SELECT s.relname AS table_name,
+           s.n_live_tup, s.n_dead_tup, s.seq_scan, COALESCE(s.idx_scan, 0) AS idx_scan,
+           pg_total_relation_size(s.relid) AS total_bytes
+    FROM pg_stat_user_tables AS s
+  master: true
+  metrics:
+    - table_name:  {usage: "LABEL",   description: "Таблица"}
+    - n_live_tup:  {usage: "GAUGE",   description: "Живых строк (оценка)"}
+    - n_dead_tup:  {usage: "GAUGE",   description: "Мёртвых строк (ждут vacuum)"}
+    - seq_scan:    {usage: "COUNTER", description: "Последовательных сканирований"}
+    - idx_scan:    {usage: "COUNTER", description: "Сканирований по индексу"}
+    - total_bytes: {usage: "GAUGE",   description: "Размер таблицы с индексами, байт"}
+
+pinpals_slow_statements:
+  query: |
+    SELECT queryid::text AS queryid,
+           left(regexp_replace(query, '\s+', ' ', 'g'), 80) AS query,
+           calls, total_exec_time, mean_exec_time
+    FROM pg_stat_statements
+    WHERE dbid = (SELECT oid FROM pg_database WHERE datname = current_database())
+    ORDER BY total_exec_time DESC
+    LIMIT 5
+  master: true
+  metrics:
+    - queryid:         {usage: "LABEL",   description: "queryid"}
+    - query:           {usage: "LABEL",   description: "Начало текста запроса"}
+    - calls:           {usage: "COUNTER", description: "Число вызовов"}
+    - total_exec_time: {usage: "COUNTER", description: "Суммарное время выполнения, мс"}
+    - mean_exec_time:  {usage: "GAUGE",   description: "Среднее время выполнения, мс"}
