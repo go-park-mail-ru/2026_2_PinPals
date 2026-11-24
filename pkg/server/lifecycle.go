@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"2026_2_PinPals/pkg/config"
+	"2026_2_PinPals/pkg/database"
 	"2026_2_PinPals/pkg/middleware"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -19,7 +20,6 @@ import (
 
 func Run(
 	ctx context.Context,
-	setupDB func(context.Context, *config.Config, *slog.Logger) (*pgxpool.Pool, error),
 	registerRoutes func(*config.Config, *slog.Logger, *pgxpool.Pool, *http.ServeMux) func(),
 ) error {
 	cfg := config.MustLoad()
@@ -33,7 +33,7 @@ func Run(
 		),
 	)
 
-	pool, err := setupDB(ctx, cfg, logger)
+	pool, err := database.NewPostgresPool(ctx, cfg.Postgres.DSN(), logger)
 	if err != nil {
 		return fmt.Errorf("setup db: %w", err)
 	}

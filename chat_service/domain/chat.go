@@ -5,6 +5,11 @@ import (
 	"time"
 )
 
+const (
+	MaxMessageLength   = 4000
+	MaxMessagesPerPage = 100
+)
+
 var (
 	ErrValidation      = errors.New("validation error")
 	ErrChatNotFound    = errors.New("chat not found")

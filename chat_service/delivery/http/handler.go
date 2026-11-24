@@ -69,6 +69,10 @@ func (h *Handler) CreateChat(w http.ResponseWriter, r *http.Request) {
 	if err := httpx.DecodeJSON(w, r, &request); err != nil {
 		return
 	}
+	if err := request.Validate(); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "некорректный пользователь")
+		return
+	}
 	chat, err := h.service.CreateChat(r.Context(), userID, request.UserID)
 	if err != nil {
 		h.writeError(w, r, err)
@@ -123,23 +127,12 @@ func (h *Handler) ListMessages(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "некорректный ID чата")
 		return
 	}
-	limit := 50
-	if value := r.URL.Query().Get("limit"); value != "" {
-		limit, err = strconv.Atoi(value)
-		if err != nil {
-			httpx.WriteError(w, http.StatusBadRequest, "некорректный limit")
-			return
-		}
+	query, err := ParseListMessagesQuery(r.URL.Query())
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "некорректные параметры пагинации")
+		return
 	}
-	beforeID := 0
-	if value := r.URL.Query().Get("before_id"); value != "" {
-		beforeID, err = strconv.Atoi(value)
-		if err != nil {
-			httpx.WriteError(w, http.StatusBadRequest, "некорректный before_id")
-			return
-		}
-	}
-	messages, err := h.service.ListMessages(r.Context(), userID, chatID, limit, beforeID)
+	messages, err := h.service.ListMessages(r.Context(), userID, chatID, query.Limit, query.BeforeID)
 	if err != nil {
 		h.writeError(w, r, err)
 		return

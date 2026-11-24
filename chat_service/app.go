@@ -10,15 +10,10 @@ import (
 	"2026_2_PinPals/chat_service/repository"
 	"2026_2_PinPals/chat_service/usecase"
 	"2026_2_PinPals/pkg/config"
-	"2026_2_PinPals/pkg/database"
 	"2026_2_PinPals/pkg/middleware"
 	"2026_2_PinPals/pkg/server"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
-
-func SetupPostgres(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*pgxpool.Pool, error) {
-	return database.NewPostgresPool(ctx, cfg.Postgres.DSN(), logger)
-}
 
 func RegisterRoutes(cfg *config.Config, _ *slog.Logger, pool *pgxpool.Pool, mux *http.ServeMux) func() {
 	tokens := middleware.NewTokenManager([]byte(cfg.Auth.JWTSecret), int64(cfg.Auth.TokenTTL/time.Second))
@@ -40,5 +35,5 @@ func RegisterRoutes(cfg *config.Config, _ *slog.Logger, pool *pgxpool.Pool, mux 
 }
 
 func Run(ctx context.Context) error {
-	return server.Run(ctx, SetupPostgres, RegisterRoutes)
+	return server.Run(ctx, RegisterRoutes)
 }
