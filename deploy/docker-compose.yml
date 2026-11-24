@@ -61,7 +61,7 @@ services:
     restart: unless-stopped
 
   prometheus:
-    image: prom/prometheus:v2.53.0
+    image: prom/prometheus:v3.16.0-distroless
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - promdata:/prometheus
@@ -71,7 +71,7 @@ services:
     restart: unless-stopped
 
   grafana:
-    image: grafana/grafana:11.1.0
+    image: grafana/grafana:13.3.1-distroless
     environment:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
@@ -87,7 +87,7 @@ services:
     restart: unless-stopped
 
 networks:
-  db_net:         
+  db_net:
   monitoring_net:
 
 volumes:
