@@ -140,3 +140,15 @@ func DeskPreviewResponseFromDomain(pins []domain.Pin, baseURL string) DeskPrevie
 	}
 	return out
 }
+
+type SearchDesksResponse struct {
+	Desks []DeskResponse `json:"desks"`
+}
+
+func SearchDesksResponseFromDomain(desks []domain.Desk, baseURL string) SearchDesksResponse {
+	out := SearchDesksResponse{Desks: make([]DeskResponse, len(desks))}
+	for i, desk := range desks {
+		out.Desks[i] = DeskResponseFromDomain(desk, nil, baseURL)
+	}
+	return out
+}
