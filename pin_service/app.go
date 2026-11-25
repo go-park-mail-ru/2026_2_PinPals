@@ -75,6 +75,10 @@ func RegisterRoutes(cfg *config.Config, logger *slog.Logger, pool *pgxpool.Pool,
 	mux.Handle("GET /api/v1/pins/{pinID}/likes", middleware.OptionalAccess(tokenManager)(http.HandlerFunc(likeHandler.GetStats)))
 	mux.HandleFunc("GET /images/{filename}", imageHandler.Get)
 	mux.Handle("GET /api/v1/desks/{deskID}/pins/preview", middleware.OptionalAccess(tokenManager)(http.HandlerFunc(deskHandler.GetFirstPins)))
+	searchService := usecase.NewSearchService(pinRepository)
+	searchHandler := httphandler.NewSearchHandler(searchService, cfg.App.BaseURL)
+	mux.HandleFunc("GET /api/v1/pins/search", searchHandler.SearchPins)
+	mux.HandleFunc("GET /api/v1/desks/search", searchHandler.SearchDesks)
 }
 
 func Run(ctx context.Context) error {
