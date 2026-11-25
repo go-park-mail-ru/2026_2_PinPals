@@ -21,6 +21,7 @@ func RegisterRoutes(cfg *config.Config, logger *slog.Logger, pool *pgxpool.Pool,
 	tokenManager := middleware.NewTokenManager(
 		[]byte(cfg.Auth.JWTSecret),
 		int64(cfg.Auth.TokenTTL/time.Second),
+		middleware.WithRevocationStore(middleware.NewPostgresTokenStore(pool)),
 	)
 
 	authRepository := repository.NewRepository(pool)

@@ -213,6 +213,44 @@ func TestSendMessageRejectsInvalidPayloadAtTransport(t *testing.T) {
 	}
 }
 
+type deniedAccessService struct {
+	*transportValidationService
+}
+
+func (s *deniedAccessService) HasAccess(context.Context, int, int) (bool, error) {
+	s.hasAccessCalls++
+	return false, nil
+}
+
+func TestWebSocketRejectsChatWithoutAccessBeforeUpgrade(t *testing.T) {
+	service := &deniedAccessService{transportValidationService: &transportValidationService{}}
+	handler := NewHandler(service, NewHub(), HandlerOptions{})
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/chats/12/ws", nil)
+	request.SetPathValue("chatID", "12")
+	recorder := newAuthenticatedRecorder(t, request, http.HandlerFunc(handler.WebSocket))
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d; body=%s", recorder.Code, http.StatusNotFound, recorder.Body.String())
+	}
+	if service.hasAccessCalls != 1 {
+		t.Fatalf("HasAccess calls = %d, want 1", service.hasAccessCalls)
+	}
+}
+
+func TestWebSocketRejectsUnauthenticatedRequest(t *testing.T) {
+	service := &transportValidationService{}
+	handler := NewHandler(service, NewHub(), HandlerOptions{})
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/chats/12/ws", nil)
+	request.SetPathValue("chatID", "12")
+	recorder := httptest.NewRecorder()
+	handler.WebSocket(recorder, request)
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d; body=%s", recorder.Code, http.StatusUnauthorized, recorder.Body.String())
+	}
+	if service.hasAccessCalls != 0 {
+		t.Fatalf("HasAccess was called %d times for an unauthenticated request", service.hasAccessCalls)
+	}
+}
+
 func TestWebSocketRejectsInvalidChatIDBeforeAccessCheck(t *testing.T) {
 	service := &transportValidationService{}
 	handler := NewHandler(service, NewHub(), HandlerOptions{})
