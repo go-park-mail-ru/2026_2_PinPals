@@ -33,7 +33,15 @@ func NewSubscriptionHandler(service SubscriptionService) *SubscriptionHandler {
 // @Security CookieAuth
 // @Router /users/{userID}/subscription [post]
 func (h *SubscriptionHandler) Subscribe(w http.ResponseWriter, r *http.Request) {
-	h.changeSubscription(w, r, true)
+	userID, targetID, ok := h.parseParticipants(w, r)
+	if !ok {
+		return
+	}
+	if err := h.service.Subscribe(r.Context(), userID, targetID); err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // Unsubscribe godoc
@@ -47,30 +55,29 @@ func (h *SubscriptionHandler) Subscribe(w http.ResponseWriter, r *http.Request) 
 // @Security CookieAuth
 // @Router /users/{userID}/subscription [delete]
 func (h *SubscriptionHandler) Unsubscribe(w http.ResponseWriter, r *http.Request) {
-	h.changeSubscription(w, r, false)
-}
-
-func (h *SubscriptionHandler) changeSubscription(w http.ResponseWriter, r *http.Request, subscribe bool) {
-	userID, ok := middleware.UserIDFromContext(r.Context())
+	userID, targetID, ok := h.parseParticipants(w, r)
 	if !ok {
-		httpx.WriteError(w, http.StatusUnauthorized, "необходима авторизация")
 		return
 	}
-	targetID, err := strconv.Atoi(r.PathValue("userID"))
-	if err != nil || targetID < 1 {
-		httpx.WriteError(w, http.StatusBadRequest, "некорректный идентификатор пользователя")
-		return
-	}
-	if subscribe {
-		err = h.service.Subscribe(r.Context(), userID, targetID)
-	} else {
-		err = h.service.Unsubscribe(r.Context(), userID, targetID)
-	}
-	if err != nil {
+	if err := h.service.Unsubscribe(r.Context(), userID, targetID); err != nil {
 		h.writeError(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *SubscriptionHandler) parseParticipants(w http.ResponseWriter, r *http.Request) (int, int, bool) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		httpx.WriteError(w, http.StatusUnauthorized, "необходима авторизация")
+		return 0, 0, false
+	}
+	targetID, err := strconv.Atoi(r.PathValue("userID"))
+	if err != nil || targetID < 1 {
+		httpx.WriteError(w, http.StatusBadRequest, "некорректный идентификатор пользователя")
+		return 0, 0, false
+	}
+	return userID, targetID, true
 }
 
 func (h *SubscriptionHandler) writeError(w http.ResponseWriter, r *http.Request, err error) {
