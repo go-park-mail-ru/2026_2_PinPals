@@ -7,6 +7,7 @@ import (
     "strings"
     "time"
     "unicode/utf8"
+	"strconv"
 
     "2026_2_PinPals/pin_service/domain"
 	"2026_2_PinPals/pkg/images"
@@ -172,4 +173,41 @@ func ListResponseFromDomain(page domain.Page, baseURL string) ListResponse {
 		resp.NextCursor = &cr
 	}
 	return resp
+}
+
+type SearchRequest struct {
+	Query  string
+	Limit  int
+	Offset int
+}
+
+func NewSearchRequest(values url.Values) (SearchRequest, error) {
+	req := SearchRequest{Query: strings.TrimSpace(values.Get("q")), Limit: 20}
+	if raw := values.Get("limit"); raw != "" {
+		limit, err := strconv.Atoi(raw)
+		if err != nil {
+			return req, domain.ErrValidation
+		}
+		req.Limit = limit
+	}
+	if raw := values.Get("offset"); raw != "" {
+		offset, err := strconv.Atoi(raw)
+		if err != nil {
+			return req, domain.ErrValidation
+		}
+		req.Offset = offset
+	}
+	return req, nil
+}
+
+type SearchPinsResponse struct {
+	Pins []PinResponse `json:"pins"`
+}
+
+func SearchPinsResponseFromDomain(pins []domain.Pin, baseURL string) SearchPinsResponse {
+	out := SearchPinsResponse{Pins: make([]PinResponse, len(pins))}
+	for i, pin := range pins {
+		out.Pins[i] = PinResponseFromDomain(pin, baseURL)
+	}
+	return out
 }

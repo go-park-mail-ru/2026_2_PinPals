@@ -16,6 +16,8 @@ import (
 	"2026_2_PinPals/pkg/middleware"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"2026_2_PinPals/pkg/metrics"
 )
 
 func Run(
@@ -38,6 +40,7 @@ func Run(
 		return fmt.Errorf("setup db: %w", err)
 	}
 	defer pool.Close()
+	metrics.RegisterPool(pool)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
@@ -47,7 +50,7 @@ func Run(
 	})
 	shutdownRoutes := registerRoutes(cfg, logger, pool, mux)
 
-	var handler http.Handler = mux
+	var handler http.Handler = metrics.Middleware(mux)
 	handler = middleware.CORS(cfg.CORS.AllowedOrigins)(handler)
 	handler = middleware.SecurityHeaders(handler)
 	handler = middleware.RequestLogger(logger)(handler)
@@ -56,6 +59,13 @@ func Run(
 	if shutdownRoutes != nil {
 		httpServer.RegisterOnShutdown(shutdownRoutes)
 	}
+
+	metricsServer := metrics.NewServer(":" + cfg.App.MetricsPort)
+	go func() {
+		if err := metricsServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logger.Error("metrics server stopped", "error", err)
+		}
+	}()
 
 	shutdownCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -84,22 +94,10 @@ func Run(
 
 	shutdownRequestCtx, cancelShutdown := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancelShutdown()
-	shutdownErr := httpServer.Shutdown(shutdownRequestCtx)
-	if shutdownErr != nil {
-		// Force-close ordinary HTTP connections after the graceful timeout.
-		// Hijacked connections are closed by the route-specific callback below.
-		_ = httpServer.Close()
-	}
-	// net/http invokes RegisterOnShutdown callbacks asynchronously and does not
-	// wait for hijacked connections such as WebSockets. Invoke the route cleanup
-	// callback again after Shutdown; chat hub cleanup is idempotent and waits for
-	// all upgraded handlers to finish before the deferred pool.Close runs.
-	if shutdownRoutes != nil {
-		shutdownRoutes()
-	}
-	if shutdownErr != nil {
-		logger.Error("graceful shutdown failed", "error", shutdownErr)
-		return shutdownErr
+	_ = metricsServer.Shutdown(shutdownRequestCtx)
+	if err := httpServer.Shutdown(shutdownRequestCtx); err != nil {
+		logger.Error("graceful shutdown failed", "error", err)
+		return err
 	}
 
 	logger.Info("server stopped")
