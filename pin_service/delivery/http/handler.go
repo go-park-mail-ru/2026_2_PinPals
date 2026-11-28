@@ -51,8 +51,9 @@ type PinService interface {
 }
 
 type Handler struct {
-	service      PinService
-	imageStorage interface {
+	DefaultPageSize func() int
+	service         PinService
+	imageStorage    interface {
 		Save(io.Reader) (string, error)
 		Delete(string) error
 	}
@@ -105,6 +106,9 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	limit, cursor := req.ToDomain()
+	if req.Limit == nil && h.DefaultPageSize != nil {
+		limit = h.DefaultPageSize()
+	}
 
 	page, err := h.service.List(r.Context(), limit, cursor)
 	if err != nil {

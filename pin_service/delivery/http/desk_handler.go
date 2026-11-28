@@ -153,6 +153,10 @@ func (h *DeskHandler) Create(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusUnsupportedMediaType, "Поддерживаются JSON и multipart/form-data")
 		return
 	}
+	if err := req.Validate(); err != nil {
+		h.writeError(w, r, err)
+		return
+	}
 	input := req.ToDomain()
 	if avatarHeader != nil {
 		avatar, ok := h.openAvatar(w, avatarHeader)

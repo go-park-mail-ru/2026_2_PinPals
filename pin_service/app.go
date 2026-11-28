@@ -1,10 +1,13 @@
 package pin_service
 
 import (
+	"2026_2_PinPals/pkg/httpx"
+	sdk "2026_2_PinPals/pkg/onlineconf"
 	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"time"
 
 	httphandler "2026_2_PinPals/pin_service/delivery/http"
@@ -38,15 +41,21 @@ func SetupPostgres(ctx context.Context, cfg *config.Config, logger *slog.Logger)
 }
 
 func RegisterRoutes(cfg *config.Config, logger *slog.Logger, pool *pgxpool.Pool, mux *http.ServeMux) {
+	registerWithCache(cfg, logger, pool, mux, &sdk.Cache{})
+}
+
+func registerWithCache(cfg *config.Config, logger *slog.Logger, pool *pgxpool.Pool, mux *http.ServeMux, cache *sdk.Cache) {
 	tokenManager := middleware.NewTokenManager(
 		[]byte(cfg.Auth.JWTSecret),
 		int64(cfg.Auth.TokenTTL/time.Second),
+		middleware.WithRevocationStore(middleware.NewPostgresTokenStore(pool)),
 	)
 
 	pinRepository := repository.NewRepository(pool)
 	pinService := usecase.NewService(pinRepository)
 	requestValidator := validator.New()
 	pinHandler := httphandler.NewHandler(pinService, cfg.App.BaseURL, requestValidator, images.NewStorage(cfg.App.ImageDir))
+	pinHandler.DefaultPageSize = cache.PageSize
 	imageHandler := images.NewHandler(cfg.App.ImageDir)
 
 	mux.HandleFunc("POST /api/v1/pins/search", pinHandler.List)
@@ -68,15 +77,40 @@ func RegisterRoutes(cfg *config.Config, logger *slog.Logger, pool *pgxpool.Pool,
 	mux.Handle("DELETE /api/v1/desks/{deskID}", middleware.CSRF(middleware.Access(tokenManager)(http.HandlerFunc(deskHandler.Delete))))
 	mux.Handle("POST /api/v1/desks/{deskID}/pins/{pinID}", middleware.CSRF(middleware.Access(tokenManager)(http.HandlerFunc(deskHandler.AddPin))))
 	mux.Handle("DELETE /api/v1/desks/{deskID}/pins/{pinID}", middleware.CSRF(middleware.Access(tokenManager)(http.HandlerFunc(deskHandler.RemovePin))))
+	guardLikes := func(next http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			user, _ := middleware.UserIDFromContext(r.Context())
+			if !cache.Enabled(sdk.LikesKey, user) {
+				httpx.WriteError(w, 403, "feature_disabled")
+				return
+			}
+			next(w, r)
+		}
+	}
 	likeService := usecase.NewLikeService(pinRepository)
 	likeHandler := httphandler.NewLikeHandler(likeService)
-	mux.Handle("POST /api/v1/pins/{pinID}/like", middleware.CSRF(middleware.Access(tokenManager)(http.HandlerFunc(likeHandler.Add))))
-	mux.Handle("DELETE /api/v1/pins/{pinID}/like", middleware.CSRF(middleware.Access(tokenManager)(http.HandlerFunc(likeHandler.Remove))))
-	mux.Handle("GET /api/v1/pins/{pinID}/likes", middleware.OptionalAccess(tokenManager)(http.HandlerFunc(likeHandler.GetStats)))
+	mux.Handle("POST /api/v1/pins/{pinID}/like", middleware.CSRF(middleware.Access(tokenManager)(guardLikes(likeHandler.Add))))
+	mux.Handle("DELETE /api/v1/pins/{pinID}/like", middleware.CSRF(middleware.Access(tokenManager)(guardLikes(likeHandler.Remove))))
+	mux.Handle("GET /api/v1/pins/{pinID}/likes", middleware.OptionalAccess(tokenManager)(guardLikes(likeHandler.GetStats)))
 	mux.HandleFunc("GET /images/{filename}", imageHandler.Get)
 	mux.Handle("GET /api/v1/desks/{deskID}/pins/preview", middleware.OptionalAccess(tokenManager)(http.HandlerFunc(deskHandler.GetFirstPins)))
+	searchService := usecase.NewSearchService(pinRepository)
+	searchHandler := httphandler.NewSearchHandler(searchService, cfg.App.BaseURL)
+	mux.HandleFunc("GET /api/v1/pins/search", searchHandler.SearchPins)
+	mux.HandleFunc("GET /api/v1/desks/search", searchHandler.SearchDesks)
 }
 
 func Run(ctx context.Context) error {
-	return server.Run(ctx, SetupPostgres, RegisterRoutes)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	cache := &sdk.Cache{}
+	interval, _ := time.ParseDuration(os.Getenv("ONLINECONF_CACHE_REFRESH_INTERVAL"))
+	base := os.Getenv("ONLINECONF_URL")
+	if base == "" {
+		base = "http://onlineconf_service:8000"
+	}
+	go cache.Run(ctx, base, "pin_service", os.Getenv("ONLINECONF_INTERNAL_TOKEN"), interval)
+	return server.Run(ctx, SetupPostgres, func(cfg *config.Config, logger *slog.Logger, pool *pgxpool.Pool, mux *http.ServeMux) {
+		registerWithCache(cfg, logger, pool, mux, cache)
+	})
 }

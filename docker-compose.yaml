@@ -141,6 +141,27 @@ services:
     networks:
       - app-network
 
+  onlineconf_service:
+    build:
+      context: .
+      args:
+        SERVICE: onlineconf_service
+    env_file: .env
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks: [app-network]
+
+  frontend:
+    build: ../frontend
+    environment:
+      ONLINECONF_API_TARGET: http://onlineconf_service:8000
+    ports:
+      - "127.0.0.1:3000:8080"
+    depends_on: [auth_service, pin_service, user_service, onlineconf_service]
+    networks: [app-network]
+
   prometheus:
     image: prom/prometheus:v3.16.0-distroless
     container_name: prometheus

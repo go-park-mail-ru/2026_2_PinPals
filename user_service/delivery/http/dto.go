@@ -9,6 +9,8 @@ import (
 
 	"2026_2_PinPals/pkg/images"
 	"2026_2_PinPals/user_service/domain"
+	"net/url"
+	"strconv"
 )
 
 // UpdateProfileRequest contains only profile text fields. Avatar files are
@@ -106,4 +108,64 @@ func UserResponseFromDomain(u domain.User, baseURL string) UserResponse {
 		AvatarURL:   avatarURL,
 		CreatedAt:   u.CreatedAt,
 	}
+}
+
+type SearchRequest struct {
+	Query  string
+	Limit  int
+	Offset int
+}
+
+func NewSearchRequest(values url.Values) (SearchRequest, error) {
+	req := SearchRequest{Query: strings.TrimSpace(values.Get("q")), Limit: 20}
+	if raw := values.Get("limit"); raw != "" {
+		limit, err := strconv.Atoi(raw)
+		if err != nil {
+			return req, domain.ErrValidation
+		}
+		req.Limit = limit
+	}
+	if raw := values.Get("offset"); raw != "" {
+		offset, err := strconv.Atoi(raw)
+		if err != nil {
+			return req, domain.ErrValidation
+		}
+		req.Offset = offset
+	}
+	return req, nil
+}
+
+type UserSearchItemResponse struct {
+	ID          int     `json:"user_id"`
+	Name        string  `json:"name"`
+	UserTag     string  `json:"user_tag"`
+	Description *string `json:"description,omitempty"`
+	AvatarURL   *string `json:"avatar_url,omitempty"`
+}
+
+func UserSearchItemResponseFromDomain(u domain.User, baseURL string) UserSearchItemResponse {
+	avatarURL := u.AvatarURL
+	if avatarURL != nil {
+		publicURL := images.PublicURL(baseURL, *avatarURL)
+		avatarURL = &publicURL
+	}
+	return UserSearchItemResponse{
+		ID:          u.ID,
+		Name:        u.Name,
+		UserTag:     u.UserTag,
+		Description: u.Description,
+		AvatarURL:   avatarURL,
+	}
+}
+
+type SearchUsersResponse struct {
+	Users []UserSearchItemResponse `json:"users"`
+}
+
+func SearchUsersResponseFromDomain(users []domain.User, baseURL string) SearchUsersResponse {
+	out := SearchUsersResponse{Users: make([]UserSearchItemResponse, len(users))}
+	for i, user := range users {
+		out.Users[i] = UserSearchItemResponseFromDomain(user, baseURL)
+	}
+	return out
 }
