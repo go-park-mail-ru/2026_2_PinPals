@@ -51,7 +51,7 @@ func Run(
 	shutdownRoutes := registerRoutes(cfg, logger, pool, mux)
 
 	var handler http.Handler = metrics.Middleware(mux)
-	handler = RequestLogger(logger)(handler)
+	//handler = RequestLogger(logger)(handler)
 	handler = middleware.CORS(cfg.CORS.AllowedOrigins)(handler)
 	handler = middleware.SecurityHeaders(handler)
 	handler = middleware.RequestLogger(logger)(handler)
