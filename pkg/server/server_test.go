@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"2026_2_PinPals/pkg/middleware"
 )
 
 func TestNewSetsTimeouts(t *testing.T) {
@@ -32,13 +34,15 @@ func TestNewSetsTimeouts(t *testing.T) {
 
 func TestRequestLogger(t *testing.T) {
 	var called bool
+	var contextRequestID string
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
+		contextRequestID, _ = middleware.RequestIDFromContext(r.Context())
 		w.WriteHeader(http.StatusNoContent)
 	})
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	handler := RequestLogger(logger)(next)
+	handler := middleware.RequestLogger(logger)(next)
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 	rec := httptest.NewRecorder()
@@ -50,5 +54,8 @@ func TestRequestLogger(t *testing.T) {
 	}
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("expected 204, got %d", rec.Code)
+	}
+	if got := rec.Header().Get(middleware.RequestIDHeader); got == "" || got != contextRequestID {
+		t.Fatalf("response request id %q does not match context %q", got, contextRequestID)
 	}
 }

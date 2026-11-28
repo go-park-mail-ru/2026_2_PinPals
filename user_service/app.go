@@ -2,7 +2,6 @@ package user_service
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -19,24 +18,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func SetupPostgres(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*pgxpool.Pool, error) {
-	pool, err := pgxpool.New(ctx, cfg.Postgres.DSN())
-	if err != nil {
-		logger.Error("failed to create postgres pool", "error", err)
-		return nil, fmt.Errorf("create postgres pool: %w", err)
-	}
-	pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	if err := pool.Ping(pingCtx); err != nil {
-		logger.Error("failed to connect to postgres", "error", err)
-		pool.Close()
-		return nil, fmt.Errorf("connect to postgres: %w", err)
-	}
-	return pool, nil
-}
-
-func RegisterRoutes(cfg *config.Config, logger *slog.Logger, pool *pgxpool.Pool, mux *http.ServeMux) {
-	tokens := middleware.NewTokenManager([]byte(cfg.Auth.JWTSecret), int64(cfg.Auth.TokenTTL/time.Second))
+func RegisterRoutes(cfg *config.Config, logger *slog.Logger, pool *pgxpool.Pool, mux *http.ServeMux) func() {
+	tokens := middleware.NewTokenManager(
+		[]byte(cfg.Auth.JWTSecret),
+		int64(cfg.Auth.TokenTTL/time.Second),
+		middleware.WithRevocationStore(middleware.NewPostgresTokenStore(pool)),
+	)
 	repo := repository.NewRepository(pool)
 	service := usecase.NewService(repo)
 	handler := httphandler.NewHandler(service, httphandler.HandlerOptions{
@@ -55,6 +42,8 @@ func RegisterRoutes(cfg *config.Config, logger *slog.Logger, pool *pgxpool.Pool,
 	mux.Handle("GET /api/v1/users/search", access(http.HandlerFunc(searchHandler.SearchUsers)))
 	mux.Handle("POST /api/v1/users/{userID}/subscription", middleware.CSRF(access(http.HandlerFunc(subscriptionHandler.Subscribe))))
 	mux.Handle("DELETE /api/v1/users/{userID}/subscription", middleware.CSRF(access(http.HandlerFunc(subscriptionHandler.Unsubscribe))))
+	return nil
+
 }
 
-func Run(ctx context.Context) error { return server.Run(ctx, SetupPostgres, RegisterRoutes) }
+func Run(ctx context.Context) error { return server.Run(ctx, RegisterRoutes) }

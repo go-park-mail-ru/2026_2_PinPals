@@ -2,7 +2,6 @@ package pin_service
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
@@ -19,28 +18,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func SetupPostgres(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*pgxpool.Pool, error) {
-	pool, err := pgxpool.New(ctx, cfg.Postgres.DSN())
-	if err != nil {
-		logger.Error("failed to create postgres pool", "error", err)
-		return nil, fmt.Errorf("create postgres pool: %w", err)
-	}
-
-	pingCtx, cancelPoolPing := context.WithTimeout(ctx, 5*time.Second)
-	defer cancelPoolPing()
-	if err := pool.Ping(pingCtx); err != nil {
-		logger.Error("failed to connect to postgres", "error", err)
-		pool.Close()
-		return nil, fmt.Errorf("connect to postgres: %w", err)
-	}
-
-	return pool, nil
-}
-
-func RegisterRoutes(cfg *config.Config, logger *slog.Logger, pool *pgxpool.Pool, mux *http.ServeMux) {
+func RegisterRoutes(cfg *config.Config, logger *slog.Logger, pool *pgxpool.Pool, mux *http.ServeMux) func() {
 	tokenManager := middleware.NewTokenManager(
 		[]byte(cfg.Auth.JWTSecret),
 		int64(cfg.Auth.TokenTTL/time.Second),
+		middleware.WithRevocationStore(middleware.NewPostgresTokenStore(pool)),
 	)
 
 	pinRepository := repository.NewRepository(pool)
@@ -79,8 +61,10 @@ func RegisterRoutes(cfg *config.Config, logger *slog.Logger, pool *pgxpool.Pool,
 	searchHandler := httphandler.NewSearchHandler(searchService, cfg.App.BaseURL)
 	mux.HandleFunc("GET /api/v1/pins/search", searchHandler.SearchPins)
 	mux.HandleFunc("GET /api/v1/desks/search", searchHandler.SearchDesks)
+	return nil
+
 }
 
 func Run(ctx context.Context) error {
-	return server.Run(ctx, SetupPostgres, RegisterRoutes)
+	return server.Run(ctx, RegisterRoutes)
 }

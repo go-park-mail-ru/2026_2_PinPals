@@ -1,4 +1,4 @@
-.PHONY: help build build-auth build-pin build-user run tests fmt up down cover generate-mocks swagger swagger-auth swagger-pin swagger-user
+.PHONY: help build build-auth build-pin build-user build-chat run tests fmt up down cover generate-mocks swagger swagger-auth swagger-pin swagger-user swagger-chat
 
 help:
 	@echo "Available commands:"
@@ -6,11 +6,12 @@ help:
 	@echo "  make build-auth     - build auth service"
 	@echo "  make build-pin      - build pin service"
 	@echo "  make build-user     - build user service"
+	@echo "  make build-chat     - build chat service"
 	@echo "  make run            - start application with docker compose"
 	@echo "  make tests          - run tests"
 	@echo "  make cover          - show coverage, excluding generated mocks; fail at <= 60%"
 	@echo "  make generate-mocks - regenerate repository and HTTP-handler gomock mocks"
-	@echo "  make swagger        - regenerate OpenAPI docs (run after all three branches are merged)"
+	@echo "  make swagger        - regenerate OpenAPI docs (run after all services are merged)"
 	@echo "  make fmt            - format Go code"
 	@echo "  make down           - stop docker compose"
 
@@ -26,6 +27,9 @@ build-pin:
 build-user:
 	go build ./cmd/user_service
 
+build-chat:
+	go build ./cmd/chat_service
+
 run:
 	docker compose up --build
 
@@ -33,7 +37,7 @@ tests:
 	go test ./...
 
 fmt:
-	gofmt -w ./cmd ./pkg ./auth_service ./pin_service ./user_service
+	gofmt -w ./cmd ./pkg ./auth_service ./pin_service ./user_service ./chat_service
 
 down:
 	docker compose down
@@ -57,7 +61,7 @@ cover:
 	 awk -v coverage="$$coverage" 'BEGIN { if (coverage+0 <= 60.0) { print "Coverage must be greater than 60%"; exit 1 } }'
 
 # OpenAPI documentation is generated after the delivery/use-case refactoring.
-swagger: swagger-auth swagger-pin swagger-user
+swagger: swagger-auth swagger-pin swagger-user swagger-chat
 
 swagger-auth:
 	go run github.com/swaggo/swag/cmd/swag@v1.16.6 init -g main.go -d cmd/auth_service,auth_service -o docs/auth --parseDependency --parseInternal
@@ -67,3 +71,6 @@ swagger-pin:
 
 swagger-user:
 	go run github.com/swaggo/swag/cmd/swag@v1.16.6 init -g main.go -d cmd/user_service,user_service -o docs/user --parseDependency --parseInternal
+
+swagger-chat:
+	go run github.com/swaggo/swag/cmd/swag@v1.16.6 init -g main.go -d cmd/chat_service,chat_service -o docs/chat --parseDependency --parseInternal

@@ -1,6 +1,8 @@
 # 2026_2_PinPals
 Backend проекта Pinterest — команды PinPals
 
+> Для AI coding agents: перед анализом и изменением backend-кода прочитайте [AI_PROJECT_GUIDE.md](AI_PROJECT_GUIDE.md) — в нём описаны архитектура, структура, контракты, соглашения и команды проверки.
+
 ## Состав команды
 
 - [Шерстеникин Никита](https://github.com/Sherstanoi)
@@ -34,7 +36,7 @@ Backend проекта Pinterest — команды PinPals
 
 1. Скопируйте `.env.example` в `.env` и задайте `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` и `AUTH_JWT_SECRET` (не короче 32 символов).
 2. Запустите сервисы командой `docker compose up --build` или `make run`.
-3. PostgreSQL доступен сервисам внутри compose-сети на `postgres:5432`. Порты HTTP-сервисов на хосте: `8001` (auth), `8002` (pins), `8003` (users).
+3. PostgreSQL доступен сервисам внутри compose-сети на `postgres:5432`. Порты HTTP-сервисов на хосте: `8001` (auth), `8002` (pins), `8003` (users), `8004` (chat).
 
 ### Изображения
 
@@ -43,3 +45,19 @@ Backend проекта Pinterest — команды PinPals
 ### OpenAPI
 
 OpenAPI-файлы генерируются workflow `.github/workflows/openapi.yml` и доступны как артефакт GitHub Actions; публикация GitHub Pages выполняется при push в `develop`. Swagger UI не входит в runtime-маршруты сервисов.
+
+### Чаты и WebSocket
+
+`chat_service` доступен на `http://localhost:8004`. Все методы требуют авторизацию через `access_token` (HttpOnly cookie или Bearer-токен). Для HTTP-запросов, изменяющих состояние и использующих cookie, также требуется `X-CSRF-Token`.
+
+- `POST /api/v1/chats` — создать личный чат или вернуть существующий (`{ "user_id": 42 }`).
+- `GET /api/v1/chats` — список чатов текущего пользователя с последним сообщением.
+- `GET /api/v1/chats/{chatID}/messages?limit=50&before_id=123` — история сообщений; `limit` от 1 до 100, сообщения возвращаются в хронологическом порядке.
+- `POST /api/v1/chats/{chatID}/messages` — отправить сообщение HTTP-запросом (`{ "body": "Привет", "related_to": 123 }`). Новое сообщение также рассылается активным WebSocket-клиентам чата.
+- `GET /api/v1/chats/{chatID}/ws` — WebSocket для отправки и получения сообщений. Клиент отправляет JSON `{ "type": "message", "body": "Привет", "related_to": 123 }`; сервер рассылает событие `{ "type": "message", "message": { ... } }`. Ошибки соединения возвращаются как `{ "type": "error", "error": "..." }`.
+
+В WebSocket используются ping/pong, ограничение размера входящего сообщения и отдельная очередь записи на соединение. Рассылка выполняется в пределах одного экземпляра `chat_service`; для нескольких экземпляров потребуется внешний broker/pub-sub.
+
+### Request ID и SQL-логи
+
+Каждый HTTP-запрос получает UUID в `X-Request-ID` (валидный UUID из входящего заголовка сохраняется). Единый `middleware.RequestLogger` добавляет ID в контекст и request-scoped `slog`-логгер; тот же ID возвращается в HTTP-ответе. Все логи обработчика и SQL-запросы через `pgx.QueryTracer` используют этот контекст. Для каждого входящего сообщения в WebSocket создаётся отдельный `request_id`, чтобы разные сообщения одного соединения можно было независимо искать в логах; логи самого соединения используют ID HTTP-handshake. Значения SQL-параметров намеренно не логируются.

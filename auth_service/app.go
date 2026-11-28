@@ -2,7 +2,6 @@ package auth_service
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -18,28 +17,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func SetupPostgres(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*pgxpool.Pool, error) {
-	pool, err := pgxpool.New(ctx, cfg.Postgres.DSN())
-	if err != nil {
-		logger.Error("failed to create postgres pool", "error", err)
-		return nil, fmt.Errorf("create postgres pool: %w", err)
-	}
-
-	pingCtx, cancelPoolPing := context.WithTimeout(ctx, 5*time.Second)
-	defer cancelPoolPing()
-	if err := pool.Ping(pingCtx); err != nil {
-		logger.Error("failed to connect to postgres", "error", err)
-		pool.Close()
-		return nil, fmt.Errorf("connect to postgres: %w", err)
-	}
-
-	return pool, nil
-}
-
-func RegisterRoutes(cfg *config.Config, logger *slog.Logger, pool *pgxpool.Pool, mux *http.ServeMux) {
+func RegisterRoutes(cfg *config.Config, logger *slog.Logger, pool *pgxpool.Pool, mux *http.ServeMux) func() {
 	tokenManager := middleware.NewTokenManager(
 		[]byte(cfg.Auth.JWTSecret),
 		int64(cfg.Auth.TokenTTL/time.Second),
+		middleware.WithRevocationStore(middleware.NewPostgresTokenStore(pool)),
 	)
 
 	authRepository := repository.NewRepository(pool)
@@ -49,8 +31,9 @@ func RegisterRoutes(cfg *config.Config, logger *slog.Logger, pool *pgxpool.Pool,
 	mux.HandleFunc("POST /api/v1/auth/register", authHandler.Register)
 	mux.HandleFunc("POST /api/v1/auth/login", authHandler.Login)
 	mux.Handle("POST /api/v1/auth/logout", middleware.CSRF(middleware.Access(tokenManager)(http.HandlerFunc(authHandler.Logout))))
+	return nil
 }
 
 func Run(ctx context.Context) error {
-	return server.Run(ctx, SetupPostgres, RegisterRoutes)
+	return server.Run(ctx, RegisterRoutes)
 }
